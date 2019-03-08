@@ -11,14 +11,6 @@ from gpiozero import Button
 from signal import pause
 
 import subprocess
-import requests
-
-class Web:
-    def check_uploads():
-        r = requests.get('')
-
-        print(r.status_code)
-        print(r.json())
 
 class PyTape:
     def __init__(self):
@@ -109,4 +101,5 @@ class PyTape:
 if __name__ == "__main__":
     pytape = PyTape()
     pytape.menu()
+    pytape.monitor()
     pause()
