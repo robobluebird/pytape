@@ -16,7 +16,7 @@ class TapeControl:
         response = 0
 
         while response == 0:
-            time.sleep(1)
+            time.sleep(0.5)
             response = self.read()
 
         return response
@@ -26,6 +26,8 @@ class TapeControl:
             self.playMode()
         elif value == 4:
             self.recordMode()
+        elif value == 6:
+            return self.stopMotor()
         else:
             self.write(value)
 
@@ -57,7 +59,12 @@ class TapeControl:
 
     def stopMotor(self):
         self.write(6)
-        return self.awaitResponse()
+        time.sleep(0.5)
+        response = self.bus.read_i2c_block_data(self.address, 0)
+        return self.intFromByteArray(response)
+
+    def intFromByteArray(self, byteArray):
+        return int("".join(map(lambda x: chr(x), [x for x in byteArray if x != 255])))
 
 if __name__ == "__main__":
     tc = TapeControl()
@@ -70,4 +77,4 @@ if __name__ == "__main__":
 
         response = tc.command(num)
 
-        print "we sent %x and we got %x" % (num, response)
+        print response
