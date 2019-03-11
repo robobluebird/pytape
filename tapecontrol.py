@@ -63,6 +63,30 @@ class TapeControl:
         response = self.bus.read_i2c_block_data(self.address, 0)
         return self.intFromByteArray(response)
 
+    def play(self):
+        self.stopMotor()
+        self.playMode()
+        self.startMotor()
+
+    def rec(self):
+        self.stopMotor()
+        self.recordMode()
+        self.startMotor()
+
+    def stop(self):
+        self.stopMotor()
+        self.standbyMode()
+
+    def rw(self):
+        self.stopMotor()
+        self.reverseMode()
+        self.startMotor()
+
+    def ff(self):
+        self.stopMotor()
+        self.standbyMode()
+        self.startMotor()
+
     def intFromByteArray(self, byteArray):
         return int("".join(map(lambda x: chr(x), [x for x in byteArray if x != 255])))
 

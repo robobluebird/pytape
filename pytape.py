@@ -1,4 +1,5 @@
 import time
+import subprocess
 
 import Adafruit_GPIO.SPI as SPI
 import Adafruit_SSD1306
@@ -10,15 +11,18 @@ from PIL import ImageFont
 from gpiozero import Button
 from signal import pause
 
-import subprocess
+from tapecontrol import TapeControl 
+from web import Web
 
 class PyTape:
+    def do_nothing(self):
+        return
+
     def __init__(self):
-        self.menu_items = ['check for sounds', 'play from start', 'tape control']
-        self.menu_index = 0
-        self.menu_length = 3
-        self.menu_range_start = 0
-        self.menu_range_end = 2
+        self.text_items = []
+
+        self.ignore_next = False
+        self.lock = False
 
         self.b1 = Button('GPIO21')
         self.b2 = Button('GPIO20')
@@ -47,59 +51,171 @@ class PyTape:
         # Draw a black filled box to clear the image.
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
 
+        self.tc = TapeControl()
+        self.w = Web()
+
+    def connection_info(self):
+        # Draw a black filled box to clear the image.
+        self.draw.rectangle((0, 0, self.width, 8), outline = 0, fill = 0)
+
         cmd = "iwgetid -r"
         ssid = subprocess.check_output(cmd, shell = True )
         self.draw.text((0, -2), str(ssid), font=self.font, fill=255)
 
-    def menu_up(self):
-        if self.menu_index > 0:
-            self.menu_index -= 1
-            self.draw_menu()
+        self.display.image(self.image)
+        self.display.display()
 
-    def menu_down(self):
-        if self.menu_index < len(self.menu_items) - 1:
-            self.menu_index += 1
-            self.draw_menu()
+    def main_menu(self):
+        def w():
+            if self.lock:
+                return
+            
+            self.lock = True
 
-    def menu_in(self):
-        obj = self.menu_items[menu_index]
+            if self.ignore_next:
+                self.ignore_next = False
+                self.lock = False
+                return
+            else:
+                self.web()
 
-        if callable(obj):
-            obj()
+            self.lock = False
 
-    def menu_out(self):
-        print('blep')
+        def t():
+            if self.lock:
+                return
+            
+            self.lock = True
 
-    def menu(self):
-        self.menu_index = 0
-        self.b1.when_pressed = self.menu_up
-        self.b2.when_pressed = self.menu_down
-        self.b3.when_pressed = self.menu_out
-        self.b4.when_pressed = self.menu_in
+            if self.ignore_next:
+                self.ignore_next = False
+                self.lock = False
+                return
+            else:
+                self.tape()
+
+            self.lock = False
+
+        self.b1.when_released = w
+        self.b2.when_released = t
+        self.b3.when_released = self.do_nothing
+        self.b4.when_released = self.do_nothing
+
+        self.text_items = ["1. Web", "2. Tape", "3. Conn"]
+
         self.draw_menu()
 
-    def draw_menu(self):
-        if self.menu_index < self.menu_range_start:
-            self.menu_range_start = self.menu_index
-            self.menu_range_end = self.menu_index + 2
-        elif self.menu_index > self.menu_range_end:
-            self.menu_range_start = self.menu_index - 2
-            self.menu_range_end = self.menu_index
+    def tape(self):
+        def p():
+            if self.lock:
+                return
 
+            self.lock = True
+
+            if self.b2.is_pressed:
+                self.ignore_next = True
+                self.tc.rec()
+            else:
+                self.tc.play()
+
+            self.lock = False
+
+        def s():
+            if self.lock:
+                print "locked!"
+                return
+            
+            self.lock = True
+
+            if self.ignore_next:
+                self.ignore_next = False
+                self.lock = False
+                return
+            else:
+                self.tc.stop()
+
+            self.lock = False
+
+        def ff():
+            if self.lock:
+                return
+            
+            self.lock = True
+
+            if self.b2.is_pressed:
+                self.ignore_next = True
+                self.lock = False
+                self.main_menu()
+            else:
+                self.tc.ff()
+
+            self.lock = False
+
+        def rw():
+            if self.lock:
+                return
+
+            self.lock = True
+            self.tc.rw()
+            self.lock = False
+
+        self.b1.when_released = p
+        self.b2.when_released = s
+        self.b3.when_released = ff
+        self.b4.when_released = rw
+
+        self.text_items = [
+            "1. Play",
+            "2. Stop",
+            "3. FF",
+            "4. RW",
+            "2 + 1. Rec",
+            "2 + 3. Back"
+        ]
+
+        self.draw_menu()
+
+    def web(self):
+        def b():
+            if self.lock:
+                return
+
+            self.lock = True
+            self.w.stop()
+            self.main_menu()
+            self.lock = False
+
+        self.b1.when_released = b
+        self.b2.when_released = self.do_nothing
+        self.b3.when_released = self.do_nothing
+        self.b4.when_released = self.do_nothing
+
+        self.text_items = ["1. Back"]
+        self.draw_menu(y=14)
+        self.w.start(self)
+
+    def update(self):
+        # update 2nd and 3rd lines of display
+        return
+
+    def draw_menu(self, y=-2):
         self.draw.rectangle((0, 8, self.width, self.height), outline = 0, fill = 0)
 
-        self.menu_item_y = 6
+        for idx, item in enumerate(self.text_items):
+            x = 0
 
-        for idx in range(self.menu_range_start, self.menu_range_end + 1):
-            leader = "-> " if idx == self.menu_index else "   "
-            self.draw.text((0, self.menu_item_y), leader + self.menu_items[idx], font=self.font, fill=255)
-            self.menu_item_y += 8
+            if idx % 2 == 0:
+                y += 8
+            else:
+                x = 64
+
+            self.draw.text((x, y), item, font=self.font, fill=255)
 
         self.display.image(self.image)
         self.display.display()
 
 if __name__ == "__main__":
     pytape = PyTape()
-    pytape.menu()
-    pytape.monitor()
+    pytape.connection_info()
+    pytape.main_menu()
     pause()
