@@ -194,9 +194,30 @@ class PyTape:
         self.draw_menu(y=14)
         self.w.start(self)
 
-    def update(self):
-        # update 2nd and 3rd lines of display
-        return
+    def update(self, message):
+        lines = ([], [])
+        i = 0
+        j = 0
+        parts = message.split()
+        parts.reverse()
+
+        lines[0].append(parts.pop())
+
+        while len(parts) > 0:
+            part = parts.pop()
+
+            new_len = len(part) + len(" ".join(lines[j])) + 1
+
+            if new_len <= 20 or j == 1:
+                lines[j].append(part)
+            else:
+                j += 1
+
+        self.draw.rectangle((0, 8, self.width, 16), outline = 0, fill = 0)
+        self.draw.text((0, 6), " ".join(lines[0]), font=self.font, fill=255)
+        self.draw.text((0, 14), " ".join(lines[1]), font=self.font, fill=255)
+        self.display.image(self.image)
+        self.display.display()
 
     def draw_menu(self, y=-2):
         self.draw.rectangle((0, 8, self.width, self.height), outline = 0, fill = 0)

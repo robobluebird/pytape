@@ -28,7 +28,7 @@ class Web:
         r = requests.post(url)
 
     def stop(self):
-        print "stopping!"
+        self.update("stopping!")
 
         self.do_monitoring = False
         self.thread.join()
@@ -48,7 +48,7 @@ class Web:
         self.do_monitoring = True
 
         while self.do_monitoring:
-            self.update("checking...")
+            self.update("checking the web...")
 
             response = self.check()
 
@@ -61,7 +61,7 @@ class Web:
 
                 self.update("sending %s to tape..." % name)
 
-                cmd = "mpg123 %s" % name
+                cmd = "mpg123 -q %s" % name
 
                 self.tc.recordMode()
 
