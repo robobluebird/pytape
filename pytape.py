@@ -39,10 +39,10 @@ class PyTape:
         self.display.clear()
         self.display.display()
 
-        self.normal_font = ImageFont.truetype("dos.ttf", 11)
-        self.big_font    = ImageFont.truetype("dos.ttf", 20)
+        self.normal_font = ImageFont.truetype("dos.ttf", 8)
+        self.big_font    = ImageFont.truetype("dos.ttf", 16)
 
-        # Create blank image for drawing.
+        # Create blank image for drawin
         # Make sure to create image with mode '1' for 1-bit color.
         self.width = self.display.width
         self.height = self.display.height
@@ -55,7 +55,7 @@ class PyTape:
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
 
         self.tc = TapeControl()
-        self.w = Web()
+        self.w = Web(owner=self)
 
     def connection_info(self):
         # Draw a black filled box to clear the image.
@@ -141,7 +141,6 @@ class PyTape:
 
         def s():
             if self.lock:
-                print "locked!"
                 return
             
             self.lock = True
@@ -211,7 +210,7 @@ class PyTape:
 
         self.text_items = ["1. Back"]
         self.draw_menu(y=16)
-        self.w.start(self)
+        self.w.start()
 
     def choose_network(self):
         cmd = "sudo iw dev wlan0 scan | grep SSID"
@@ -310,21 +309,23 @@ class PyTape:
         self.draw_password()
 
     def connect(self):
-        [self.selected_network, self.password]
-
         lines = [
-                    "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev",
-                    "update_config=1",
-                    "",
-                    "network={",
-                    '\tssid="%s"' % self.selected_network,
-                    '\tpsk="%s"' % self.password,
-                    "}"
-                ]
+            "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n",
+            "update_config=1\n",
+            "\n",
+            "network={\n",
+            '\tssid="%s"\n' % self.selected_network,
+            '\tpsk="%s"' % self.password,
+            "}"
+        ]
 
         conf = open("/etc/wpa_supplicant/wpa_supplicant.conf", 'w')
         conf.writelines(lines)
         conf.close()
+
+        msg = "connecting..."
+
+        self.update(message=msg, full=True)
 
         subprocess.check_output("sudo ip link set wlan0 down", shell = True )
 
@@ -334,17 +335,18 @@ class PyTape:
 
         while ("SSID: %s" % self.selected_network) not in result:
             result = subprocess.check_output("iw wlan0 link", shell=True)
-            print "waiting..."
             time.sleep(1)
+            msg += "."
+            self.update(message=msg, full=True)
 
-        print "done! waiting again..."
+        msg = "done! waiting for connectivity..."
 
-        time.sleep(5)
-
-        print "go!"
+        for i in range(1, 6):
+            self.update(message=msg, full=True)
+            time.sleep(1)
+            msg += "."
 
         self.main_menu()
-        # figure out why fetching of ssid in main menu doesn't work after this...
 
     def draw_password(self):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
@@ -356,27 +358,28 @@ class PyTape:
         prefix = ""
         postfix = ""
 
-        while i < 8 and self.char_index - i >= 0:
+        while i < 12 and self.char_index - i >= 0:
             prefix = self.chars[self.char_index - i] + prefix
             i += 1
 
-        px = 49 - (5 * i)
+        px = 60 - (5 * i)
 
         i = 1
         
-        while i < 8 and self.char_index + i < len(self.chars):
+        while i < 12 and self.char_index + i < len(self.chars):
             postfix += self.chars[self.char_index + i]
             i += 1
 
         self.draw.text((px, 24), prefix, font=self.normal_font, fill=255)
-        self.draw.text((54, 16), self.chars[self.char_index], font=self.big_font, fill=255)
-        self.draw.text((69, 24), postfix, font=self.normal_font, fill=255)
+        self.draw.text((60, 16), self.chars[self.char_index], font=self.big_font, fill=255)
+        self.draw.text((70, 24), postfix, font=self.normal_font, fill=255)
 
         self.display.image(self.image)
         self.display.display()
 
-    def update(self, message):
+    def update(self, message, full=False):
         lines = ([], [])
+        max_lines = 2
         i = 0
         j = 0
         parts = message.split()
@@ -385,16 +388,14 @@ class PyTape:
         lines[0].append(parts.pop())
 
         while len(parts) > 0:
-            part = parts.pop()
+            lines[j].append(parts.pop())
 
-            new_len = len(part) + len(" ".join(lines[j])) + 1
-
-            if new_len <= 20 or j == 1:
-                lines[j].append(part)
-            else:
+            if len(" ".join(lines[j])) > 26 and j < max_lines - 1:
+                parts.append(lines[j].pop())
                 j += 1
 
-        self.draw.rectangle((0, 8, self.width, 16), outline = 0, fill = 0)
+        h = 31 if full else 16
+        self.draw.rectangle((0, 8, self.width, h), outline = 0, fill = 0)
         self.draw.text((0, 8), " ".join(lines[0]), font=self.normal_font, fill=255)
         self.draw.text((0, 16), " ".join(lines[1]), font=self.normal_font, fill=255)
         self.display.image(self.image)

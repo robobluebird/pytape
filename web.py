@@ -6,7 +6,8 @@ from tapecontrol import TapeControl
 from threading import Thread
 
 class Web:
-    def __init__(self):
+    def __init__(self, owner):
+        self.owner = owner
         self.do_monitoring = False
         self.tc = TapeControl()
 
@@ -33,8 +34,7 @@ class Web:
         self.do_monitoring = False
         self.thread.join()
 
-    def start(self, owner=None):
-        self.owner = owner
+    def start(self):
         self.thread = Thread(target=self.monitor)
         self.thread.start()
 
