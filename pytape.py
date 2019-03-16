@@ -315,8 +315,8 @@ class PyTape:
             "\n",
             "network={\n",
             '\tssid="%s"\n' % self.selected_network,
-            '\tpsk="%s"' % self.password,
-            "}"
+            '\tpsk="%s"\n' % self.password,
+            "}\n"
         ]
 
         conf = open("/etc/wpa_supplicant/wpa_supplicant.conf", 'w')
