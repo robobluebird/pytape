@@ -39,8 +39,9 @@ class PyTape:
         self.display.clear()
         self.display.display()
 
-        self.normal_font = ImageFont.truetype("dos.ttf", 8)
-        self.big_font    = ImageFont.truetype("dos.ttf", 16)
+        f = "/home/pi/Code/python/pytape/dos.ttf"
+        self.normal_font = ImageFont.truetype(f, 8)
+        self.big_font    = ImageFont.truetype(f, 16)
 
         # Create blank image for drawin
         # Make sure to create image with mode '1' for 1-bit color.
@@ -394,7 +395,7 @@ class PyTape:
                 parts.append(lines[j].pop())
                 j += 1
 
-        h = 31 if full else 16
+        h = 32 if full else 24
         self.draw.rectangle((0, 8, self.width, h), outline = 0, fill = 0)
         self.draw.text((0, 8), " ".join(lines[0]), font=self.normal_font, fill=255)
         self.draw.text((0, 16), " ".join(lines[1]), font=self.normal_font, fill=255)
