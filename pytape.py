@@ -8,7 +8,7 @@ from PIL import Image
 from PIL import ImageDraw
 from PIL import ImageFont
 
-from gpiozero import Button
+from gpiozero import Button, DigitalInputDevice
 from signal import pause
 
 from tapecontrol import TapeControl 
@@ -33,6 +33,10 @@ class PyTape:
         self.b3 = Button('GPIO16')
         self.b4 = Button('GPIO12')
 
+        self.io1 = DigitalInputDevice('GPIO17')
+
+        self.io1.when_activated = self.start_of_tape
+
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
 
         self.display.begin()
@@ -40,7 +44,7 @@ class PyTape:
         self.display.display()
 
         f = "/home/pi/Code/python/pytape/dos.ttf"
-        self.normal_font = ImageFont.truetype(f, 8)
+        self.normal_font = ImageFont.truetype(f, 10)
         self.big_font    = ImageFont.truetype(f, 16)
 
         # Create blank image for drawin
@@ -57,6 +61,12 @@ class PyTape:
 
         self.tc = TapeControl()
         self.w = Web(owner=self)
+
+    def start_of_tape(self):
+        # do something now that we said "hey, start of tape"
+        self.update('hi!')
+        time.sleep(3)
+        self.main_menu()
 
     def connection_info(self):
         # Draw a black filled box to clear the image.
@@ -116,12 +126,27 @@ class PyTape:
 
             self.lock = False
 
+        def e():
+            if self.lock:
+                return
+
+            self.lock = True
+
+            if self.ignore_next:
+                self.ignore_next = False
+                self.lock = False
+                return
+            else:
+                self.tc.start_of_tape()
+
+            self.lock = False
+
         self.b1.when_released = w
         self.b2.when_released = t
         self.b3.when_released = n
-        self.b4.when_released = self.do_nothing
+        self.b4.when_released = e
 
-        self.text_items = ["1. Web", "2. Tape", "3. Conn"]
+        self.text_items = ["1. Web", "2. TapeCtrl", "3. Wifi", "4. TapeStrt"]
 
         self.draw_menu()
 

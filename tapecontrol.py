@@ -87,6 +87,10 @@ class TapeControl:
         self.standbyMode()
         self.startMotor()
 
+    def start_of_tape(self):
+        self.write(8)
+        return self.awaitResponse()
+
     def intFromByteArray(self, byteArray):
         return int("".join(map(lambda x: chr(x), [x for x in byteArray if x != 255])))
 
