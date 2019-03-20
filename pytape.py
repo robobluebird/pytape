@@ -34,11 +34,9 @@ class PyTape:
         self.b4 = Button('GPIO12')
 
         self.io1 = DigitalInputDevice('GPIO17')
-
         self.io1.when_activated = self.start_of_tape
 
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
-
         self.display.begin()
         self.display.clear()
         self.display.display()
@@ -64,7 +62,7 @@ class PyTape:
 
     def start_of_tape(self):
         # do something now that we said "hey, start of tape"
-        self.update('hi!')
+        self.update('At the start!', True)
         time.sleep(3)
         self.main_menu()
 
@@ -146,7 +144,14 @@ class PyTape:
         self.b3.when_released = n
         self.b4.when_released = e
 
-        self.text_items = ["1. Web", "2. TapeCtrl", "3. Wifi", "4. TapeStrt"]
+        self.text_items = [
+            "1. Web",
+            "2. Deck",
+            "3. Wifi",
+            "4. Rewind",
+            "1+2. New",
+            "1+3. Load"
+        ]
 
         self.draw_menu()
 
@@ -213,8 +218,8 @@ class PyTape:
             "2. Stop",
             "3. FF",
             "4. RW",
-            "2 + 1. Rec",
-            "2 + 3. Back"
+            "2+1. Rec",
+            "2+3. Back"
         ]
 
         self.draw_menu()
@@ -287,7 +292,7 @@ class PyTape:
     def draw_networks(self):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
         self.draw.text((0, 0), "3. Go 4. Back 4 + 3. Rescan", font=self.normal_font, fill=255)
-        y = 8
+        y = 9
 
         for idx in range(self.menu_start, self.menu_end + 1):
             leader = "-> " if idx == self.menu_index else "   "
@@ -378,7 +383,7 @@ class PyTape:
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
 
         self.draw.text((0, 0), self.selected_network, font=self.normal_font, fill=255)
-        self.draw.text((0, 8), self.password, font=self.normal_font, fill=255)
+        self.draw.text((0, 9), self.password, font=self.normal_font, fill=255)
 
         i = 1
         prefix = ""
@@ -421,14 +426,14 @@ class PyTape:
                 j += 1
 
         h = 32 if full else 24
-        self.draw.rectangle((0, 8, self.width, h), outline = 0, fill = 0)
-        self.draw.text((0, 8), " ".join(lines[0]), font=self.normal_font, fill=255)
-        self.draw.text((0, 16), " ".join(lines[1]), font=self.normal_font, fill=255)
+        self.draw.rectangle((0, 9, self.width, h), outline = 0, fill = 0)
+        self.draw.text((0, 9), " ".join(lines[0]), font=self.normal_font, fill=255)
+        self.draw.text((0, 17), " ".join(lines[1]), font=self.normal_font, fill=255)
         self.display.image(self.image)
         self.display.display()
 
     def draw_menu(self, y=0):
-        self.draw.rectangle((0, 8, self.width, self.height), outline = 0, fill = 0)
+        self.draw.rectangle((0, 9, self.width, self.height), outline = 0, fill = 0)
 
         for idx, item in enumerate(self.text_items):
             x = 0

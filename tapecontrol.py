@@ -10,9 +10,18 @@ class TapeControl:
         self.bus.write_byte(self.address, value)
 
     def read(self):
-        return self.bus.read_byte(self.address)
+        try:
+            return self.bus.read_byte(self.address)
+        except IOError:
+            return -1
 
-    def awaitResponse(self):
+    def read_bytes(self):
+        try:
+            return self.bus.read_i2c_block_data(self.address, 0)
+        except IOError:
+            return []
+
+    def await_response(self):
         response = 0
 
         while response == 0:
@@ -23,76 +32,75 @@ class TapeControl:
 
     def command(self, value):
         if value == 1:
-            self.playMode()
+            self.play_mode()
         elif value == 4:
-            self.recordMode()
+            self.record_mode()
         elif value == 6:
-            return self.stopMotor()
+            return self.stop_motor()
         else:
             self.write(value)
 
-        return self.awaitResponse()
+        return self.await_response()
 
-    def playMode(self):
+    def play_mode(self):
         self.write(1)
-        self.awaitResponse()
+        self.await_response()
         self.write(7)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def standbyMode(self):
+    def standby_mode(self):
         self.write(2)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def reverseMode(self):
+    def reverse_mode(self):
         self.write(3)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def recordMode(self):
+    def record_mode(self):
         self.write(1)
-        self.awaitResponse()
+        self.await_response()
         self.write(4)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def startMotor(self):
+    def start_motor(self):
         self.write(5)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def stopMotor(self):
+    def stop_motor(self):
         self.write(6)
         time.sleep(0.5)
-        response = self.bus.read_i2c_block_data(self.address, 0)
-        return self.intFromByteArray(response)
+        return self.int_from_byte_array(self.read_bytes())
 
     def play(self):
-        self.stopMotor()
-        self.playMode()
-        self.startMotor()
+        self.stop_motor()
+        self.play_mode()
+        self.start_motor()
 
     def rec(self):
-        self.stopMotor()
-        self.recordMode()
-        self.startMotor()
+        self.stop_motor()
+        self.record_mode()
+        self.start_motor()
 
     def stop(self):
-        self.stopMotor()
-        self.standbyMode()
+        self.stop_motor()
+        self.standby_mode()
 
     def rw(self):
-        self.stopMotor()
-        self.reverseMode()
-        self.startMotor()
+        self.stop_motor()
+        self.reverse_mode()
+        self.start_motor()
 
     def ff(self):
-        self.stopMotor()
-        self.standbyMode()
-        self.startMotor()
+        self.stop_motor()
+        self.standby_mode()
+        self.start_motor()
 
     def start_of_tape(self):
         self.write(8)
-        return self.awaitResponse()
+        return self.await_response()
 
-    def intFromByteArray(self, byteArray):
-        return int("".join(map(lambda x: chr(x), [x for x in byteArray if x != 255])))
+    def int_from_byte_array(self, byte_array):
+        return int("".join(map(lambda x: chr(x), [x for x in byte_array if x != 255])))
 
 if __name__ == "__main__":
     tc = TapeControl()
@@ -103,6 +111,4 @@ if __name__ == "__main__":
         if not num:
             continue
 
-        response = tc.command(num)
-
-        print response
+        tc.command(num)
