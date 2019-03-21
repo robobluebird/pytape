@@ -36,6 +36,9 @@ class PyTape:
         self.io1 = DigitalInputDevice('GPIO17')
         self.io1.when_activated = self.start_of_tape
 
+        self.io2 = DigitalInputDevice('GPIO27')
+        self.io1.when_activated = self.end_of_tape
+
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
         self.display.begin()
         self.display.clear()
@@ -63,6 +66,11 @@ class PyTape:
     def start_of_tape(self):
         # do something now that we said "hey, start of tape"
         self.update('At the start!', True)
+        time.sleep(3)
+        self.main_menu()
+
+    def end_of_tape(self):
+        self.update('At the end!', True)
         time.sleep(3)
         self.main_menu()
 
