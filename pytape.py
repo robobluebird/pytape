@@ -22,8 +22,11 @@ class PyTape:
         self.text_items = []
         self.chars = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789~!@#$%^&*()_+-=[]\\{}E9|;':\",./<>?"
         self.char_index = 0
-        self.password = ""
+        self.text_entry = ""
         self.selected_network = ""
+        self.tape_name = ""
+        self.ticks = 0
+        self.reason_for_waiting = None
 
         self.ignore_next = False
         self.lock = False
@@ -34,10 +37,10 @@ class PyTape:
         self.b4 = Button('GPIO12')
 
         self.io1 = DigitalInputDevice('GPIO17')
-        self.io1.when_activated = self.start_of_tape
+        self.io1.when_activated = self.message_available
 
         self.io2 = DigitalInputDevice('GPIO27')
-        self.io1.when_activated = self.end_of_tape
+        self.io2.when_activated = self.end_of_tape
 
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
         self.display.begin()
@@ -63,8 +66,30 @@ class PyTape:
         self.tc = TapeControl()
         self.w = Web(owner=self)
 
+    def message_available(self):
+        result = self.tc.get_message()
+
+        if ":" in result:
+            key, value = result.split(':')
+
+            if key == "ticks":
+                if self.reason_for_waiting == 'analysis':
+                    self.ticks = int(value)
+                    self.enter_text(self.new_tape)
+        else:
+            self.update(result, True)
+            time.sleep(3)
+            self.main_menu()
+
+    def new_tape(self, name):
+        print "!!!"
+        print name
+        print self.ticks
+        print "!!!"
+        self.tape_name = name
+        self.w.create_tape(name, self.ticks)
+
     def start_of_tape(self):
-        # do something now that we said "hey, start of tape"
         self.update('At the start!', True)
         time.sleep(3)
         self.main_menu()
@@ -75,7 +100,6 @@ class PyTape:
         self.main_menu()
 
     def connection_info(self):
-        # Draw a black filled box to clear the image.
         self.draw.rectangle((0, 0, self.width, 8), outline = 0, fill = 0)
 
         ssid = subprocess.check_output("iwgetid -r", shell = True )
@@ -112,6 +136,12 @@ class PyTape:
                 self.ignore_next = False
                 self.lock = False
                 return
+            elif self.b1.is_pressed:
+                self.ignore_next = True
+                self.lock = True
+                self.update('Analyzing tape...', True)
+                self.reason_for_waiting = 'analysis'
+                self.tc.new_tape()
             else:
                 self.tape()
 
@@ -284,7 +314,7 @@ class PyTape:
 
         def c():
             self.selected_network = self.networks[self.menu_index]
-            self.enter_password()
+            self.enter_text(self.connect)
 
         def b():
             self.selected_network = ""
@@ -310,42 +340,71 @@ class PyTape:
         self.display.image(self.image)
         self.display.display()
 
-    def enter_password(self):
-        self.password = ""
+    def enter_text(self, callback, args={}):
+        self.text_entry = ""
 
         def l():
             if self.char_index > 0:
                 self.char_index -= 1
-                self.draw_password()
+                self.draw_text_entry()
 
         def r():
             if self.char_index < len(self.chars):
                 self.char_index += 1
-                self.draw_password()
+                self.draw_text_entry()
 
         def a():
             if self.ignore_next:
                 self.ignore_next = False
                 return
             else:
-                self.password += self.chars[self.char_index]
-                self.draw_password()
+                self.text_entry += self.chars[self.char_index]
+                self.draw_text_entry()
 
         def b():
             if self.b3.is_pressed:
                 self.ignore_next = True
-                self.connect()
+                callback()
             else:
-                if len(self.password) > 0:
-                    self.password = self.password[:-1]
-                    self.draw_password()
+                if len(self.text_entry) > 0:
+                    self.text_entry = self.text_entry[:-1]
+                    self.draw_text_entry()
 
         self.b1.when_released = l
         self.b2.when_released = r
         self.b3.when_released = a
         self.b4.when_released = b
 
-        self.draw_password()
+        self.draw_draw_text_entry()
+
+    def draw_text_entry(self):
+        self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
+
+        self.draw.text((0, 0), self.selected_network, font=self.normal_font, fill=255)
+        self.draw.text((0, 9), self.text_entry, font=self.normal_font, fill=255)
+
+        i = 1
+        prefix = ""
+        postfix = ""
+
+        while i < 12 and self.char_index - i >= 0:
+            prefix = self.chars[self.char_index - i] + prefix
+            i += 1
+
+        px = 60 - (5 * i)
+
+        i = 1
+        
+        while i < 12 and self.char_index + i < len(self.chars):
+            postfix += self.chars[self.char_index + i]
+            i += 1
+
+        self.draw.text((px, 24), prefix, font=self.normal_font, fill=255)
+        self.draw.text((60, 16), self.chars[self.char_index], font=self.big_font, fill=255)
+        self.draw.text((70, 24), postfix, font=self.normal_font, fill=255)
+
+        self.display.image(self.image)
+        self.display.display()
 
     def connect(self):
         lines = [
@@ -354,7 +413,7 @@ class PyTape:
             "\n",
             "network={\n",
             '\tssid="%s"\n' % self.selected_network,
-            '\tpsk="%s"\n' % self.password,
+            '\tpsk="%s"\n' % self.text_entry,
             "}\n"
         ]
 
@@ -387,40 +446,12 @@ class PyTape:
 
         self.main_menu()
 
-    def draw_password(self):
-        self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
-
-        self.draw.text((0, 0), self.selected_network, font=self.normal_font, fill=255)
-        self.draw.text((0, 9), self.password, font=self.normal_font, fill=255)
-
-        i = 1
-        prefix = ""
-        postfix = ""
-
-        while i < 12 and self.char_index - i >= 0:
-            prefix = self.chars[self.char_index - i] + prefix
-            i += 1
-
-        px = 60 - (5 * i)
-
-        i = 1
-        
-        while i < 12 and self.char_index + i < len(self.chars):
-            postfix += self.chars[self.char_index + i]
-            i += 1
-
-        self.draw.text((px, 24), prefix, font=self.normal_font, fill=255)
-        self.draw.text((60, 16), self.chars[self.char_index], font=self.big_font, fill=255)
-        self.draw.text((70, 24), postfix, font=self.normal_font, fill=255)
-
-        self.display.image(self.image)
-        self.display.display()
-
     def update(self, message, full=False):
         lines = ([], [])
         max_lines = 2
         i = 0
         j = 0
+
         parts = message.split()
         parts.reverse()
 

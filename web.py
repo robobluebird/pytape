@@ -10,23 +10,31 @@ class Web:
         self.owner = owner
         self.do_monitoring = False
         self.tc = TapeControl()
+        self.base_url = 'https://sheltered-forest-46485.herokuapp.com'
 
     def check(self):
-        r = requests.get('https://sheltered-forest-46485.herokuapp.com/uploads')
-
+        r = requests.get("%s/uploads" % self.base_url)
         return r.json()
 
     def download(self, name):
-        url = "https://sheltered-forest-46485.herokuapp.com/uploads/%s" % name
-
+        url = "%s/uploads/%s" % (self.base_url, name)
         r = requests.get(url, allow_redirects=True)
-        
-        open(name, 'wb').write(r.content)
+        return open(name, 'wb').write(r.content)
 
     def mark(self, name):
-        url = "https://sheltered-forest-46485.herokuapp.com/uploads/%s/ok" % name
-
+        url = "%s/uploads/%s/ok" % (self.base_url, name)
         r = requests.post(url)
+        return (r.status_code, r.json())
+
+    def create(self, name, ticks):
+        url = "%s/tapes" % self.base_url
+        r = requests.post(url, data = {'name': name, 'ticks': ticks})
+        return (r.status_code, r.json())
+
+    def update(self, name, side, filename, ticks):
+        url = "%s/tapes/%s" % (self.base_url, name)
+        r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks})
+        return (r.status_code, r.json())
 
     def stop(self):
         self.update("stopping!")

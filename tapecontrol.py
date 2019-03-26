@@ -68,8 +68,7 @@ class TapeControl:
 
     def stop_motor(self):
         self.write(6)
-        time.sleep(0.5)
-        return self.int_from_byte_array(self.read_bytes())
+        return self.await_response()
 
     def play(self):
         self.stop_motor()
@@ -95,12 +94,24 @@ class TapeControl:
         self.standby_mode()
         self.start_motor()
 
+    def get_message(self):
+        self.write(9)
+        time.sleep(0.5)
+        return self.string_from_byte_array(self.read_bytes())
+
     def start_of_tape(self):
         self.write(8)
         return self.await_response()
 
+    def new_tape(self):
+        self.write(10)
+        return self.await_response()
+
     def int_from_byte_array(self, byte_array):
-        return int("".join(map(lambda x: chr(x), [x for x in byte_array if x != 255])))
+        return int(self.string_from_byte_array(byte_array))
+
+    def string_from_byte_array(self, byte_array):
+        return "".join(map(lambda x: chr(x), [x for x in byte_array if x != 255]))
 
 if __name__ == "__main__":
     tc = TapeControl()
