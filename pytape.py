@@ -24,7 +24,7 @@ class PyTape:
         self.char_index = 0
         self.text_entry = ""
         self.selected_network = ""
-        self.tape_name = ""
+        self.name = ""
         self.ticks = 0
         self.reason_for_waiting = None
 
@@ -75,19 +75,25 @@ class PyTape:
             if key == "ticks":
                 if self.reason_for_waiting == 'analysis':
                     self.ticks = int(value)
-                    self.enter_text(self.new_tape)
+                    self.enter_text('name ur tape', self.new_tape)
         else:
             self.update(result, True)
             time.sleep(3)
             self.main_menu()
 
-    def new_tape(self, name):
+    def new_tape(self):
         print "!!!"
-        print name
+        print self.text_entry
         print self.ticks
         print "!!!"
-        self.tape_name = name
-        self.w.create_tape(name, self.ticks)
+        self.update('working on it...', True, True)
+        self.w.create(self.text_entry, self.ticks)
+        self.name = self.text_entry
+        self.text_entry = ""
+        self.tape_screen()
+
+    def tape_screen(self):
+        # what do we want to show when you've "loaded" a tape?
 
     def start_of_tape(self):
         self.update('At the start!', True)
@@ -314,7 +320,7 @@ class PyTape:
 
         def c():
             self.selected_network = self.networks[self.menu_index]
-            self.enter_text(self.connect)
+            self.enter_text('enter password', self.connect)
 
         def b():
             self.selected_network = ""
@@ -340,18 +346,18 @@ class PyTape:
         self.display.image(self.image)
         self.display.display()
 
-    def enter_text(self, callback, args={}):
+    def enter_text(self, title, callback, args={}):
         self.text_entry = ""
 
         def l():
             if self.char_index > 0:
                 self.char_index -= 1
-                self.draw_text_entry()
+                self.draw_text_entry(title)
 
         def r():
             if self.char_index < len(self.chars):
                 self.char_index += 1
-                self.draw_text_entry()
+                self.draw_text_entry(title)
 
         def a():
             if self.ignore_next:
@@ -359,7 +365,7 @@ class PyTape:
                 return
             else:
                 self.text_entry += self.chars[self.char_index]
-                self.draw_text_entry()
+                self.draw_text_entry(title)
 
         def b():
             if self.b3.is_pressed:
@@ -368,19 +374,19 @@ class PyTape:
             else:
                 if len(self.text_entry) > 0:
                     self.text_entry = self.text_entry[:-1]
-                    self.draw_text_entry()
+                    self.draw_text_entry(title)
 
         self.b1.when_released = l
         self.b2.when_released = r
         self.b3.when_released = a
         self.b4.when_released = b
 
-        self.draw_draw_text_entry()
+        self.draw_text_entry(title)
 
-    def draw_text_entry(self):
+    def draw_text_entry(self, title):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
 
-        self.draw.text((0, 0), self.selected_network, font=self.normal_font, fill=255)
+        self.draw.text((0, 0), title, font=self.normal_font, fill=255)
         self.draw.text((0, 9), self.text_entry, font=self.normal_font, fill=255)
 
         i = 1
@@ -446,7 +452,7 @@ class PyTape:
 
         self.main_menu()
 
-    def update(self, message, full=False):
+    def update(self, message, full=False, top_line=False):
         lines = ([], [])
         max_lines = 2
         i = 0
@@ -465,9 +471,13 @@ class PyTape:
                 j += 1
 
         h = 32 if full else 24
-        self.draw.rectangle((0, 9, self.width, h), outline = 0, fill = 0)
-        self.draw.text((0, 9), " ".join(lines[0]), font=self.normal_font, fill=255)
-        self.draw.text((0, 17), " ".join(lines[1]), font=self.normal_font, fill=255)
+
+        t = 0 if top_line else 9
+
+        self.draw.rectangle((0, t, self.width, h), outline = 0, fill = 0)
+
+        self.draw.text((0, t), " ".join(lines[0]), font=self.normal_font, fill=255)
+        self.draw.text((0, t + 8), " ".join(lines[1]), font=self.normal_font, fill=255)
         self.display.image(self.image)
         self.display.display()
 
