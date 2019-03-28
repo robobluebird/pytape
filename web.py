@@ -33,8 +33,26 @@ class Web:
 
     def update(self, name, side, filename, ticks):
         url = "%s/tapes/%s" % (self.base_url, name)
+
         r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks})
+
         return (r.status_code, r.json())
+
+    def tapes(self):
+        r = requests.get("%s/tapes" % self.base_url)
+
+        if r.status_code == 200:
+            return r.json()['tapes']
+        else:
+            return []
+
+    def tape(self, name):
+        r = requests.get("%s/tapes/%s" % (self.base_url, name))
+
+        if r.status_code == 200:
+            return r.json()['tape']
+        else:
+            return None
 
     def stop(self):
         self.update("stopping!")

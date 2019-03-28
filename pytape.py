@@ -23,10 +23,11 @@ class PyTape:
         self.chars = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789~!@#$%^&*()_+-=[]\\{}E9|;':\",./<>?"
         self.char_index = 0
         self.text_entry = ""
-        self.selected_network = ""
         self.name = ""
+        self.current_tick = 0
         self.ticks = 0
         self.reason_for_waiting = None
+        self.tape = None
 
         self.ignore_next = False
         self.lock = False
@@ -48,7 +49,7 @@ class PyTape:
         self.display.display()
 
         f = "/home/pi/Code/python/pytape/dos.ttf"
-        self.normal_font = ImageFont.truetype(f, 10)
+        self.normal_font = ImageFont.truetype(f, 8)
         self.big_font    = ImageFont.truetype(f, 16)
 
         # Create blank image for drawin
@@ -59,9 +60,6 @@ class PyTape:
 
         # Get drawing object to draw on image.
         self.draw = ImageDraw.Draw(self.image)
-
-        # Draw a black filled box to clear the image.
-        self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
 
         self.tc = TapeControl()
         self.w = Web(owner=self)
@@ -82,18 +80,51 @@ class PyTape:
             self.main_menu()
 
     def new_tape(self):
-        print "!!!"
-        print self.text_entry
-        print self.ticks
-        print "!!!"
         self.update('working on it...', True, True)
-        self.w.create(self.text_entry, self.ticks)
-        self.name = self.text_entry
-        self.text_entry = ""
+
+        if self.w.create(self.text_entry, self.ticks):
+            self.choice = self.text_entry
+            self.choose_tape()
+            self.text_entry = ""
+        else:
+            self.main_menu()
+
+    def load_tape(self):
+        self.choices = self.w.tapes()
+        self.choose_something(self.choose_tape, "tapes...")
+
+    def choose_tape(self):
+        self.tape = self.w.tape(self.choice)
+        self.tape['ticks'] = int(self.tape['ticks'])
+
+        print type(self.tape)
+        print self.tape
+
         self.tape_screen()
 
     def tape_screen(self):
-        # what do we want to show when you've "loaded" a tape?
+        self.tc.start_of_tape()
+
+        self.display.clear()
+
+        self.draw.rectangle([(0, 0), (self.width, 32)], outline = 0, fill = 0)
+        self.draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
+        self.draw_current_track()
+        self.draw_progress()
+        self.draw.text((0, 24), "1.Play 2.Stop 3.Next 4.Prev", font=self.normal_font, fill=255)
+        self.display.image(self.image)
+        self.display.display()
+
+    def draw_current_track(self):
+        do_something = "no"
+
+    def draw_progress(self):
+        half_of_all_ticks = self.tape['ticks'] / 2
+        percentage = self.ticks / half_of_all_ticks
+        width = 10 # percentage * self.width
+        self.draw.rectangle([(-1, 15), (self.width, 24)], outline = 0, fill = 1)
+        self.draw.rectangle([(1, 17), (self.width - 2, 22)], outline = 0, fill = 0)
+        self.draw.rectangle([(1, 17), (1 + width, 22)], outline = 0, fill = 1)
 
     def start_of_tape(self):
         self.update('At the start!', True)
@@ -106,15 +137,25 @@ class PyTape:
         self.main_menu()
 
     def connection_info(self):
-        self.draw.rectangle((0, 0, self.width, 8), outline = 0, fill = 0)
+        self.draw.rectangle([(0, 7), (self.width, self.height)], outline = 0, fill = 0)
 
         ssid = subprocess.check_output("iwgetid -r", shell = True )
         self.draw.text((0, 0), str(ssid), font=self.normal_font, fill=255)
+        # self.draw.text((0, 8), str(ssid), font=self.normal_font, fill=255)
+        # self.draw.text((0, 16), str(ssid), font=self.normal_font, fill=255)
+        # self.draw.text((0, 24), str(ssid), font=self.normal_font, fill=255)
+
+        # self.draw.rectangle([(-1, -1), (self.width - 1, 1)], outline = 0, fill = 1)
+        # self.draw.rectangle([(-1, 7), (self.width, 9)], outline = 0, fill = 1)
+        # self.draw.rectangle([(-1, 15), (self.width, 17)], outline = 0, fill = 1)
+        # self.draw.rectangle([(-1, 23), (self.width, 32)], outline = 0, fill = 1)
 
         self.display.image(self.image)
         self.display.display()
 
     def main_menu(self):
+        self.display.clear()
+
         self.connection_info()
 
         def w():
@@ -145,11 +186,11 @@ class PyTape:
             elif self.b1.is_pressed:
                 self.ignore_next = True
                 self.lock = True
-                self.update('Analyzing tape...', True)
+                self.update('Analyzing tape...', True, True)
                 self.reason_for_waiting = 'analysis'
                 self.tc.new_tape()
             else:
-                self.tape()
+                self.deck()
 
             self.lock = False
 
@@ -163,6 +204,11 @@ class PyTape:
                 self.ignore_next = False
                 self.lock = False
                 return
+            elif self.b1.is_pressed:
+                self.ignore_next = True
+                self.lock = True
+                self.update('Loading tapes...', True, True)
+                self.load_tape()
             else:
                 self.choose_network()
 
@@ -199,7 +245,7 @@ class PyTape:
 
         self.draw_menu()
 
-    def tape(self):
+    def deck(self):
         def p():
             if self.lock:
                 return
@@ -287,16 +333,10 @@ class PyTape:
         self.draw_menu(y=16)
         self.w.start()
 
-    def choose_network(self):
-        cmd = "sudo iw dev wlan0 scan | grep SSID"
-
-        self.networks = subprocess.check_output(cmd, shell = True ).split('\n')
-        self.networks = filter(lambda x: len(x) > 0, self.networks)
-        self.networks = map(lambda x: x.split(':')[1].strip(), self.networks)
-
+    def choose_something(self, callback, title=None):
         self.menu_index = 0
         self.menu_start = 0
-        self.menu_end = len(self.networks) - 1 if len(self.networks) < 3 else 2
+        self.menu_end = len(self.choices) - 1 if len(self.choices) < 3 else 2
 
         def adjust_indices():
             if self.menu_index < self.menu_start:
@@ -310,20 +350,20 @@ class PyTape:
             if self.menu_index > 0:
                 self.menu_index -= 1
                 adjust_indices()
-                self.draw_networks()
+                self.draw_choices(title)
 
         def d():
-            if self.menu_index < len(self.networks) - 1:
+            if self.menu_index < len(self.choices) - 1:
                 self.menu_index += 1
                 adjust_indices()
-                self.draw_networks()
+                self.draw_choices(title)
 
         def c():
-            self.selected_network = self.networks[self.menu_index]
-            self.enter_text('enter password', self.connect)
+            self.choice = self.choices[self.menu_index]
+            callback()
 
         def b():
-            self.selected_network = ""
+            self.choice = ""
             self.main_menu()
 
         self.b1.when_released = u
@@ -331,20 +371,32 @@ class PyTape:
         self.b3.when_released = c
         self.b4.when_released = b
 
-        self.draw_networks()
+        self.draw_choices(title)
 
-    def draw_networks(self):
+    def draw_choices(self, title="3. Go 4. Back"):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
-        self.draw.text((0, 0), "3. Go 4. Back 4 + 3. Rescan", font=self.normal_font, fill=255)
-        y = 9
+        self.draw.text((0, 0), title, font=self.normal_font, fill=255)
+        y = 8
 
         for idx in range(self.menu_start, self.menu_end + 1):
             leader = "-> " if idx == self.menu_index else "   "
-            self.draw.text((0, y), leader + self.networks[idx], font=self.normal_font, fill=255)
+            self.draw.text((0, y), leader + self.choices[idx], font=self.normal_font, fill=255)
             y += 8
 
         self.display.image(self.image)
         self.display.display()
+
+    def choose_network(self):
+        cmd = "sudo iw dev wlan0 scan | grep SSID"
+
+        self.choices = subprocess.check_output(cmd, shell = True ).split('\n')
+        self.choices = filter(lambda x: len(x) > 0, self.choices)
+        self.choices = map(lambda x: x.split(':')[1].strip(), self.choices)
+
+        self.choose_something(self.network_chosen)
+
+    def network_chosen(self):
+        self.enter_text('enter password....', self.connect)
 
     def enter_text(self, title, callback, args={}):
         self.text_entry = ""
@@ -413,12 +465,17 @@ class PyTape:
         self.display.display()
 
     def connect(self):
+        print self.choice
+        print self.text_entry
+
+        return
+
         lines = [
             "ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev\n",
             "update_config=1\n",
             "\n",
             "network={\n",
-            '\tssid="%s"\n' % self.selected_network,
+            '\tssid="%s"\n' % self.choice,
             '\tpsk="%s"\n' % self.text_entry,
             "}\n"
         ]
@@ -437,7 +494,7 @@ class PyTape:
 
         result = subprocess.check_output("iw wlan0 link", shell=True)
 
-        while ("SSID: %s" % self.selected_network) not in result:
+        while ("SSID: %s" % self.choice) not in result:
             result = subprocess.check_output("iw wlan0 link", shell=True)
             time.sleep(1)
             msg += "."
@@ -446,10 +503,13 @@ class PyTape:
         msg = "done! waiting for connectivity..."
 
         for i in range(1, 6):
-            self.update(message=msg, full=True)
+            self.update(msg, full=True)
             time.sleep(1)
             msg += "."
 
+        self.choices = []
+        self.choice = ""
+        self.text_entry = ""
         self.main_menu()
 
     def update(self, message, full=False, top_line=False):
@@ -472,7 +532,7 @@ class PyTape:
 
         h = 32 if full else 24
 
-        t = 0 if top_line else 9
+        t = 0 if top_line else 8
 
         self.draw.rectangle((0, t, self.width, h), outline = 0, fill = 0)
 
@@ -482,7 +542,7 @@ class PyTape:
         self.display.display()
 
     def draw_menu(self, y=0):
-        self.draw.rectangle((0, 9, self.width, self.height), outline = 0, fill = 0)
+        self.draw.rectangle((0, 8, self.width, 31), outline = 0, fill = 0)
 
         for idx, item in enumerate(self.text_items):
             x = 0
@@ -499,6 +559,5 @@ class PyTape:
 
 if __name__ == "__main__":
     pytape = PyTape()
-    pytape.connection_info()
     pytape.main_menu()
     pause()
