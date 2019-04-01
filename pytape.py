@@ -52,13 +52,9 @@ class PyTape:
         self.normal_font = ImageFont.truetype(f, 8)
         self.big_font    = ImageFont.truetype(f, 16)
 
-        # Create blank image for drawin
-        # Make sure to create image with mode '1' for 1-bit color.
         self.width = self.display.width
         self.height = self.display.height
         self.image = Image.new('1', (self.width, self.height))
-
-        # Get drawing object to draw on image.
         self.draw = ImageDraw.Draw(self.image)
 
         self.tc = TapeControl()
@@ -73,14 +69,27 @@ class PyTape:
             if key == "ticks":
                 if self.reason_for_waiting == 'analysis':
                     self.ticks = int(value)
-                    self.enter_text('name ur tape', self.new_tape)
+                    self.create_tape()
         else:
             self.update(result, True)
             time.sleep(3)
             self.main_menu()
 
     def new_tape(self):
-        self.update('working on it...', True, True)
+        self.enter_text('name ur tape', self.check_tape_name)
+
+    def check_tape_name(self):
+        if self.w.check_tape_name(self.text_entry):
+            self.update('analyzing tape...', True, True)
+            self.reason_for_waiting = 'analysis'
+            self.tc.new_tape()
+        else:
+            self.update('tape name taken, try another...', True, True)
+            time.sleep(3)
+            self.new_tape()
+
+    def create_tape(self):
+        self.update('creating tape...', True, True)
 
         if self.w.create(self.text_entry, self.ticks):
             self.choice = self.text_entry
@@ -105,11 +114,11 @@ class PyTape:
 
         draw.rectangle([(0, 0), (self.width, self.height)], outline = 0, fill = 0)
 
-        draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
+        draw.text((0, 0), self.tape['name'], font = self.normal_font, fill = 255)
 
         msg = ""
         cmd1 = "1. OK"
-        cmd2 = "1. Never mind"
+        cmd2 = "2. Never mind"
 
         def ok():
             self.tape_screen()
@@ -118,9 +127,9 @@ class PyTape:
             self.tape = None
             self.main_menu()
 
-        if not self.tape['side_a']['complete']:
+        if self.tape['side_a']['complete'] == 'false':
             msg = "Insert tape on side A"
-        elif not self.tape['side_b']['complete']:
+        elif self.tape['side_b']['complete'] == 'false':
             msg = "Insert tape on side B"
         else:
             msg = "Tape full!"
@@ -128,7 +137,7 @@ class PyTape:
 
             def ok():
                 self.w.restart(self.tape['name'], 'a')
-                self.tc.start_of_tape()
+                self.tape_screen()
 
         self.b1.when_released = ok
         self.b2.when_released = back
@@ -145,25 +154,28 @@ class PyTape:
     def tape_screen(self):
         self.display.clear()
 
-        self.draw.rectangle([(0, 0), (self.width, 32)], outline = 0, fill = 0)
-        self.draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
-        self.draw.text((0, 8), "--", font=self.normal_font, fill=255)
-        # self.draw_current_track()
-        self.draw_progress()
-        self.draw.text((0, 24), "", font=self.normal_font, fill=255)
-        self.display.image(self.image)
+        image = Image.new('1', (self.width, self.height))
+        draw = ImageDraw.Draw(image)
+
+        draw.rectangle([(0, 0), (self.width, 32)], outline = 0, fill = 0)
+        draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
+        draw.text((0, 8), "--", font=self.normal_font, fill=255)
+        draw.text((0, 24), "blep", font=self.normal_font, fill=255)
+
+        # draw_current_track()
+        half_of_all_ticks = self.tape['ticks'] / 2
+        percentage = self.ticks / half_of_all_ticks
+        width = 10 # percentage * self.width
+
+        draw.rectangle([(-1, 15), (self.width, 24)], outline = 0, fill = 1)
+        draw.rectangle([(1, 17), (self.width - 2, 22)], outline = 0, fill = 0)
+        draw.rectangle([(1, 17), (1 + width, 22)], outline = 0, fill = 1)
+
+        self.display.image(image)
         self.display.display()
 
     def draw_current_track(self):
         do_something = "no"
-
-    def draw_progress(self):
-        half_of_all_ticks = self.tape['ticks'] / 2
-        percentage = self.ticks / half_of_all_ticks
-        width = 10 # percentage * self.width
-        self.draw.rectangle([(-1, 15), (self.width, 24)], outline = 0, fill = 1)
-        self.draw.rectangle([(1, 17), (self.width - 2, 22)], outline = 0, fill = 0)
-        self.draw.rectangle([(1, 17), (1 + width, 22)], outline = 0, fill = 1)
 
     def start_of_tape(self):
         self.update('At the start!', True)
@@ -225,9 +237,7 @@ class PyTape:
             elif self.b1.is_pressed:
                 self.ignore_next = True
                 self.lock = True
-                self.update('Analyzing tape...', True, True)
-                self.reason_for_waiting = 'analysis'
-                self.tc.new_tape()
+                self.new_tape()
             else:
                 self.deck()
 
@@ -247,6 +257,7 @@ class PyTape:
                 self.ignore_next = True
                 self.lock = True
                 self.update('Loading tapes...', True, True)
+                time.sleep(2)
                 self.choose_tape()
             else:
                 self.choose_network()

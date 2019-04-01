@@ -11,35 +11,38 @@ class Web:
         self.do_monitoring = False
         self.tc = TapeControl()
         self.base_url = 'https://sheltered-forest-46485.herokuapp.com'
+        self.headers = {'Accept': 'application/json'}
 
-    def check(self):
-        r = requests.get("%s/uploads" % self.base_url)
+    def uploads(self):
+        r = requests.get("%s/uploads" % self.base_url, headers = self.headers)
         return r.json()
 
     def download(self, name):
         url = "%s/uploads/%s" % (self.base_url, name)
-        r = requests.get(url, allow_redirects=True)
+        r = requests.get(url, allow_redirects=True, headers = self.headers)
         return open(name, 'wb').write(r.content)
 
     def mark(self, name):
         url = "%s/uploads/%s/ok" % (self.base_url, name)
-        r = requests.post(url)
+        r = requests.post(url, headers = self.headers)
         return (r.status_code, r.json())
+
+    def check_tape_name(self, name):
+        r = requests.get("%s/tapes/%s/check" % (self.base_url, name), headers = self.headers)
+        return r.status_code == 404
 
     def create(self, name, ticks):
         url = "%s/tapes" % self.base_url
-        r = requests.post(url, data = {'name': name, 'ticks': ticks})
+        r = requests.post(url, data = {'name': name, 'ticks': ticks}, headers = self.headers)
         return (r.status_code, r.json())
 
     def update(self, name, side, filename, ticks):
         url = "%s/tapes/%s" % (self.base_url, name)
-
-        r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks})
-
+        r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks}, headers = self.headers)
         return (r.status_code, r.json())
 
     def tapes(self):
-        r = requests.get("%s/tapes" % self.base_url)
+        r = requests.get("%s/tapes" % self.base_url, headers = self.headers)
 
         if r.status_code == 200:
             return r.json()['tapes']
@@ -47,7 +50,7 @@ class Web:
             return []
 
     def tape(self, name):
-        r = requests.get("%s/tapes/%s" % (self.base_url, name))
+        r = requests.get("%s/tapes/%s" % (self.base_url, name), headers = self.headers)
 
         if r.status_code == 200:
             return r.json()['tape']
@@ -76,7 +79,7 @@ class Web:
         while self.do_monitoring:
             self.update("checking the web...")
 
-            response = self.check()
+            response = self.uploads()
 
             if len(response['uploads']) > 0:
                 name = response['uploads'][0]
@@ -96,8 +99,6 @@ class Web:
                 result = subprocess.check_output(cmd, shell = True )
 
                 result = self.tc.stopMotor()
-
-                print result
 
                 self.tc.standbyMode()
 
