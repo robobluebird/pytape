@@ -84,34 +84,73 @@ class PyTape:
 
         if self.w.create(self.text_entry, self.ticks):
             self.choice = self.text_entry
-            self.choose_tape()
+            self.load_tape()
             self.text_entry = ""
+            self.choice = ""
         else:
             self.main_menu()
 
-    def load_tape(self):
-        self.choices = self.w.tapes()
-        self.choose_something(self.choose_tape, "tapes...")
-
     def choose_tape(self):
+        self.choices = self.w.tapes()
+        self.choose_something(self.load_tape, "tapes...")
+
+    def load_tape(self):
+        self.display.clear()
+
         self.tape = self.w.tape(self.choice)
         self.tape['ticks'] = int(self.tape['ticks'])
 
-        print type(self.tape)
-        print self.tape
+        image = Image.new('1', (self.width, self.height))
+        draw = ImageDraw.Draw(image)
 
-        self.tape_screen()
+        draw.rectangle([(0, 0), (self.width, self.height)], outline = 0, fill = 0)
+
+        draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
+
+        msg = ""
+        cmd1 = "1. OK"
+        cmd2 = "1. Never mind"
+
+        def ok():
+            self.tape_screen()
+
+        def back():
+            self.tape = None
+            self.main_menu()
+
+        if not self.tape['side_a']['complete']:
+            msg = "Insert tape on side A"
+        elif not self.tape['side_b']['complete']:
+            msg = "Insert tape on side B"
+        else:
+            msg = "Tape full!"
+            cmd1 = "1. Start over on side A"
+
+            def ok():
+                self.w.restart(self.tape['name'], 'a')
+                self.tc.start_of_tape()
+
+        self.b1.when_released = ok
+        self.b2.when_released = back
+        self.b3.when_released = self.do_nothing
+        self.b4.when_released = self.do_nothing
+
+        draw.text((0, 8), msg, font=self.normal_font, fill=255)
+        draw.text((0, 16), cmd1, font=self.normal_font, fill=255)
+        draw.text((0, 24), cmd2, font=self.normal_font, fill=255)
+
+        self.display.image(image)
+        self.display.display()
 
     def tape_screen(self):
-        self.tc.start_of_tape()
-
         self.display.clear()
 
         self.draw.rectangle([(0, 0), (self.width, 32)], outline = 0, fill = 0)
         self.draw.text((0, 0), self.tape['name'], font=self.normal_font, fill=255)
-        self.draw_current_track()
+        self.draw.text((0, 8), "--", font=self.normal_font, fill=255)
+        # self.draw_current_track()
         self.draw_progress()
-        self.draw.text((0, 24), "1.Play 2.Stop 3.Next 4.Prev", font=self.normal_font, fill=255)
+        self.draw.text((0, 24), "", font=self.normal_font, fill=255)
         self.display.image(self.image)
         self.display.display()
 
@@ -208,7 +247,7 @@ class PyTape:
                 self.ignore_next = True
                 self.lock = True
                 self.update('Loading tapes...', True, True)
-                self.load_tape()
+                self.choose_tape()
             else:
                 self.choose_network()
 
