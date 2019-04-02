@@ -13,17 +13,17 @@ class Web:
         self.base_url = 'https://sheltered-forest-46485.herokuapp.com'
         self.headers = {'Accept': 'application/json'}
 
-    def uploads(self):
-        r = requests.get("%s/uploads" % self.base_url, headers = self.headers)
-        return r.json()
+    def uploads(self, tape_id):
+        r = requests.get("%s/tapes/%s/uploads" % (self.base_url, tape_id), headers = self.headers)
+        return r.json()['uploads']
 
-    def download(self, name):
-        url = "%s/uploads/%s" % (self.base_url, name)
-        r = requests.get(url, allow_redirects=True, headers = self.headers)
+    def download(self, tape_id, name):
+        url = "%s/tapes/%s/uploads/%s" % (self.base_url, tape_id, name)
+        r = requests.get(url, headers = self.headers)
         return open(name, 'wb').write(r.content)
 
-    def mark(self, name):
-        url = "%s/uploads/%s/ok" % (self.base_url, name)
+    def mark(self, tape_id, name):
+        url = "%s/tapes/%s/uploads/%s/ok" % (self.base_url, tape_id, name)
         r = requests.post(url, headers = self.headers)
         return (r.status_code, r.json())
 
@@ -59,7 +59,6 @@ class Web:
 
     def stop(self):
         self.update("stopping!")
-
         self.do_monitoring = False
         self.thread.join()
 
@@ -73,48 +72,5 @@ class Web:
         else:
             print message
 
-    def monitor(self):
-        self.do_monitoring = True
-
-        while self.do_monitoring:
-            self.update("checking the web...")
-
-            response = self.uploads()
-
-            if len(response['uploads']) > 0:
-                name = response['uploads'][0]
-
-                self.update("downloading %s..." % name)
-
-                self.download(name)
-
-                self.update("sending %s to tape..." % name)
-
-                cmd = "mpg123 -q %s" % name
-
-                self.tc.recordMode()
-
-                self.tc.startMotor()
-
-                result = subprocess.check_output(cmd, shell = True )
-
-                result = self.tc.stopMotor()
-
-                self.tc.standbyMode()
-
-                self.mark(name)
-
-                os.remove(name)
-
-                self.update("downloaded, recorded, and marked finished!")
-            else:
-                self.update("nothing to do!")
-
-            time.sleep(5)
-
-
-if __name__ == "__main__":
-    w = Web()
-
-    w.monitor()
+# if __name__ == "__main__":
 
