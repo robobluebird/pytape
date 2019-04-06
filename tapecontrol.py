@@ -9,6 +9,10 @@ class TapeControl:
     def write(self, value):
         self.bus.write_byte(self.address, value)
 
+    def write_bytes(self, word):
+        data = map(lambda x: ord(x), list(word)) 
+        self.bus.write_i2c_block_data(self.address, 0, data)
+
     def read(self):
         try:
             return self.bus.read_byte(self.address)
@@ -70,6 +74,13 @@ class TapeControl:
         self.write(6)
         return self.await_response()
 
+    def start_recording(self):
+        self.record_mode()
+        self.start_motor()
+
+    def stop_recording(self):
+        self.stop()
+
     def play(self):
         self.stop_motor()
         self.play_mode()
@@ -103,9 +114,18 @@ class TapeControl:
         self.write(8)
         return self.await_response()
 
+    def advance(self, ticks):
+        self.write_bytes("advance:%d" % ticks)
+        return self.await_response()
+
     def new_tape(self):
         self.write(10)
         return self.await_response()
+
+    def get_ticks(self):
+        self.write(11)
+        time.sleep(0.5)
+        return self.string_from_byte_array(self.read_bytes())
 
     def int_from_byte_array(self, byte_array):
         return int(self.string_from_byte_array(byte_array))

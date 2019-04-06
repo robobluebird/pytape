@@ -11,6 +11,7 @@ from PIL import ImageFont
 from gpiozero import Button, DigitalInputDevice
 from signal import pause
 from threading import Thread
+import os
 
 from tapecontrol import TapeControl 
 from web import Web
@@ -70,13 +71,23 @@ class PyTape:
             key, value = result.split(':')
 
             if key == "ticks":
+                ticks = int(value)
+
                 if self.reason_for_waiting == 'analysis':
-                    self.ticks = int(value)
+                    self.ticks = ticks
+                    self.reason_for_waiting = None
                     self.create_tape()
-        else:
-            self.update(result, True)
-            time.sleep(3)
-            self.main_menu()
+                elif self.reason_for_waiting == 'advance':
+                    self.ticks = ticks
+                    self.tape_screen()
+                elif self.tape != None:
+                    self.tape_screen(ticks = value)
+
+    def advance_to_current_progress(self):
+        side = "side_%s" % self.side
+        progress = reduce(lambda x, y: x + y, map(lambda x: int(x['ticks']), self.tape[side]['tracks']), 0)
+        self.reason_for_waiting = 'advance'
+        self.tc.advance(progress)
 
     def new_tape(self):
         self.enter_text('name ur tape', self.check_tape_name)
@@ -124,8 +135,8 @@ class PyTape:
         cmd2 = "2. Never mind"
 
         def ok():
-            self.ticks = 0
-            self.tape_screen()
+            self.update("getting ready...", top_line = True, full = True)
+            self.advance_to_current_progress()
 
         def back():
             self.tape = None
@@ -158,7 +169,7 @@ class PyTape:
         self.display.image(image)
         self.display.display()
 
-    def tape_screen(self):
+    def tape_screen(self, message = "", ticks = 0):
         self.display.clear()
 
         image = Image.new('1', (self.width, self.height))
@@ -178,8 +189,7 @@ class PyTape:
 
         draw.text((0, 8), track, font=self.normal_font, fill=255)
 
-        half_of_all_ticks = self.tape['ticks'] / 2
-        percentage = self.ticks / half_of_all_ticks
+        percentage = (self.ticks + ticks) / int(self.tape['ticks'])
         right_bound = percentage * (self.width - 2)
 
         if right_bound < 1: 
@@ -189,7 +199,8 @@ class PyTape:
         draw.rectangle([(1, 17), (self.width - 2, 22)], outline = 0, fill = 0)
         draw.rectangle([(1, 17), (right_bound, 22)], outline = 0, fill = 1)
 
-        draw.text((0, 24), "", font=self.normal_font, fill=255)
+        if (message):
+            draw.text((0, 24), message, font=self.normal_font, fill=255)
 
         self.display.image(image)
         self.display.display()
@@ -200,19 +211,16 @@ class PyTape:
         self.b4.when_released = self.home
 
     def start_monitoring(self):
-        print "hi!"
         self.thread = Thread(target=self.monitor)
         self.thread.start()
 
     def stop_monitoring(self):
-        print "bye!"
-        self.update("stopping...", bottom_line = True)
+        self.tape_screen("stopping...")
         self.do_monitoring = False
         self.thread.join()
-        self.update("", bottom_line = True)
+        self.tape_screen()
 
     def home(self):
-        print "blup"
         if self.do_monitoring:
             self.stop_monitoring()
         self.tape = None
@@ -230,48 +238,70 @@ class PyTape:
 
     def monitor(self):
         if self.tape == None:
-            self.update("nothing to monitor...", bottom_line = True)
-            time.sleep(3)
-            self.tape_screen()
+            self.tape_screen("nothing to monitor...")
             return
 
         self.do_monitoring = True
 
         while self.do_monitoring:
-            self.update("checking the web...", bottom_line = True)
+            self.tape_screen("checking the web...")
 
             uploads = self.w.uploads(self.tape['name'])
 
             if len(uploads) > 0:
                 name = uploads[0]
 
-                self.update("downloading %s..." % name, bottom_line = True)
+                filename = name.replace(' ', '_')
 
-                self.w.download(self.tape['name'], name)
+                filepath = "/home/pi/%s" % filename
 
-                self.update("sending %s to tape..." % name, bottom_line = True)
+                self.tape_screen("downloading %s..." % name)
 
-                cmd = "mpg123 -q %s" % name
+                self.w.download(self.tape['name'], filename)
 
-                self.tc.recordMode()
+                self.tape_screen("sending %s to tape..." % name)
 
-                self.tc.startMotor()
+                cmd = "mpg123 %s" % filepath
+                
+                self.tc.start_recording()
 
                 result = subprocess.check_output(cmd, shell = True )
 
-                result = self.tc.stopMotor()
+                print result
 
-                self.tc.standbyMode()
+                self.tc.stop_recording()
 
                 self.w.mark(self.tape['name'], name)
 
-                os.remove(name)
+                os.remove(filepath)
 
-                self.update("downloaded, recorded, and marked finished!", bottom_line = True)
+                result = self.tc.get_ticks()
+
+                key, value = result.split(':')
+
+                ticks = int(value)
+
+                print "woah"
+                print self.ticks
+                print ticks
+
+                self.ticks += ticks
+
+                print "wow"
+                print self.ticks
+
+                tape = self.w.update(self.tape['name'], self.side, name, ticks)
+
+                print tape
+
+                if tape:
+                    self.tape = tape
+
+                self.tape_screen()
             else:
-                self.update("nothing to do!", bottom_line = True)
+                self.tape_screen("nothing to do!")
 
-            time.sleep(5)
+            time.sleep(10)
 
     def connection_info(self):
         self.draw.rectangle([(0, 7), (self.width, self.height)], outline = 0, fill = 0)
@@ -321,6 +351,7 @@ class PyTape:
                 self.lock = False
                 return
             else:
+                self.update("loading tapes...", top_line = True, full = True)
                 self.choose_tape()
 
             self.lock = False

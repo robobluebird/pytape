@@ -20,12 +20,14 @@ class Web:
     def download(self, tape_id, name):
         url = "%s/tapes/%s/uploads/%s" % (self.base_url, tape_id, name)
         r = requests.get(url, headers = self.headers)
-        return open(name, 'wb').write(r.content)
+        filename = "/home/pi/%s" % name
+        print subprocess.check_output('whoami', shell = True)
+        return open(filename, 'wb').write(r.content)
 
     def mark(self, tape_id, name):
         url = "%s/tapes/%s/uploads/%s/ok" % (self.base_url, tape_id, name)
         r = requests.post(url, headers = self.headers)
-        return (r.status_code, r.json())
+        return r.status_code == 200
 
     def check_tape_name(self, name):
         r = requests.get("%s/tapes/%s/check" % (self.base_url, name), headers = self.headers)
@@ -34,12 +36,16 @@ class Web:
     def create(self, name, ticks):
         url = "%s/tapes" % self.base_url
         r = requests.post(url, data = {'name': name, 'ticks': ticks}, headers = self.headers)
-        return (r.status_code, r.json())
+        return r.status_code == 200
 
     def update(self, name, side, filename, ticks):
-        url = "%s/tapes/%s" % (self.base_url, name)
+        url = "%s/tapes/%s/sida/%s" % (self.base_url, name, side)
         r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks}, headers = self.headers)
-        return (r.status_code, r.json())
+
+        if r.status_code == 200:
+            return r.json()['tape']
+        else:
+            return None
 
     def tapes(self):
         r = requests.get("%s/tapes" % self.base_url, headers = self.headers)
@@ -58,19 +64,12 @@ class Web:
             return None
 
     def stop(self):
-        self.update("stopping!")
         self.do_monitoring = False
         self.thread.join()
 
     def start(self):
         self.thread = Thread(target=self.monitor)
         self.thread.start()
-
-    def update(self, message):
-        if self.owner != None:
-            self.owner.update(message)
-        else:
-            print message
 
 # if __name__ == "__main__":
 
