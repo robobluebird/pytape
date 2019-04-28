@@ -7,11 +7,38 @@ class TapeControl:
         self.address = 0x04
 
     def write(self, value):
-        self.bus.write_byte(self.address, value)
+        try:
+            return self.bus.write_byte(self.address, value)
+        except IOError:
+            return -1
+
+    def write_with_retry(self, value):
+        response = -1
+        count = 0
+
+        while response == -1 and count < 10:
+            response = self.write(value)
+            count += 1
+
+        return response
 
     def write_bytes(self, word):
         data = map(lambda x: ord(x), list(word)) 
-        self.bus.write_i2c_block_data(self.address, 0, data)
+
+        try:
+            return self.bus.write_i2c_block_data(self.address, 0, data)
+        except IOError:
+            return -1
+
+    def write_bytes_with_retry(self, word):
+        response = -1
+        count = 0
+
+        while response == -1 and count < 10:
+            response = self.write_bytes(word)
+            count += 1
+
+        return response
 
     def read(self):
         try:
@@ -24,6 +51,15 @@ class TapeControl:
             return self.bus.read_i2c_block_data(self.address, 0)
         except IOError:
             return []
+
+    def await_bytes_response(self):
+        response = -1
+
+        while response == -1:
+            time.sleep(0.5)
+            response = self.read_bytes()
+
+        return response
 
     def await_response(self):
         response = 0
@@ -42,36 +78,36 @@ class TapeControl:
         elif value == 6:
             return self.stop_motor()
         else:
-            self.write(value)
+            self.write_with_retry(value)
 
         return self.await_response()
 
     def play_mode(self):
-        self.write(1)
+        self.write_with_retry(1)
         self.await_response()
-        self.write(7)
+        self.write_with_retry(7)
         return self.await_response()
 
     def standby_mode(self):
-        self.write(2)
+        self.write_with_retry(2)
         return self.await_response()
 
     def reverse_mode(self):
-        self.write(3)
+        self.write_with_retry(3)
         return self.await_response()
 
     def record_mode(self):
-        self.write(1)
+        self.write_with_retry(1)
         self.await_response()
-        self.write(4)
+        self.write_with_retry(4)
         return self.await_response()
 
     def start_motor(self):
-        self.write(5)
+        self.write_with_retry(5)
         return self.await_response()
 
     def stop_motor(self):
-        self.write(6)
+        self.write_with_retry(6)
         return self.await_response()
 
     def start_recording(self):
@@ -106,26 +142,26 @@ class TapeControl:
         self.start_motor()
 
     def get_message(self):
-        self.write(9)
+        self.write_with_retry(9)
         time.sleep(0.5)
-        return self.string_from_byte_array(self.read_bytes())
+        return self.string_from_byte_array(self.await_bytes_response())
 
     def start_of_tape(self):
-        self.write(8)
+        self.write_with_retry(8)
         return self.await_response()
 
     def advance(self, ticks):
-        self.write_bytes("advance:%d" % ticks)
+        self.write_bytes_with_retry("advance:%d" % ticks)
         return self.await_response()
 
     def new_tape(self):
-        self.write(10)
+        self.write_with_retry(10)
         return self.await_response()
 
     def get_ticks(self):
-        self.write(11)
+        self.write_with_retry(11)
         time.sleep(0.5)
-        return self.string_from_byte_array(self.read_bytes())
+        return self.string_from_byte_array(self.await_bytes_response())
 
     def int_from_byte_array(self, byte_array):
         return int(self.string_from_byte_array(byte_array))

@@ -17,12 +17,16 @@ class Web:
         r = requests.get("%s/tapes/%s/uploads" % (self.base_url, tape_id), headers = self.headers)
         return r.json()['uploads']
 
-    def download(self, tape_id, name):
+    def download(self, tape_id, name, filepath):
         url = "%s/tapes/%s/uploads/%s" % (self.base_url, tape_id, name)
-        r = requests.get(url, headers = self.headers)
-        filename = "/home/pi/%s" % name
-        print subprocess.check_output('whoami', shell = True)
-        return open(filename, 'wb').write(r.content)
+        r = requests.get(url,  headers = self.headers)
+        response = requests.get(url, stream=True)
+        handle = open(filepath, "wb")
+        for chunk in response.iter_content(chunk_size=512):
+            if chunk:
+                handle.write(chunk)
+        handle.close()
+        return handle.closed
 
     def mark(self, tape_id, name):
         url = "%s/tapes/%s/uploads/%s/ok" % (self.base_url, tape_id, name)
@@ -38,9 +42,9 @@ class Web:
         r = requests.post(url, data = {'name': name, 'ticks': ticks}, headers = self.headers)
         return r.status_code == 200
 
-    def update(self, name, side, filename, ticks):
-        url = "%s/tapes/%s/sida/%s" % (self.base_url, name, side)
-        r = requests.put(url, data = {'side': side, 'filename': filename, 'ticks': ticks}, headers = self.headers)
+    def update(self, name, side, complete = False, filename = None, ticks = None):
+        url = "%s/tapes/%s/side/%s" % (self.base_url, name, side)
+        r = requests.put(url, data = {'side': side, 'complete': complete, 'filename': filename, 'ticks': ticks}, headers = self.headers)
 
         if r.status_code == 200:
             return r.json()['tape']
