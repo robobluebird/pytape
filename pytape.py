@@ -197,49 +197,6 @@ class PyTape:
         self.choices = self.w.tapes()
         self.choose_something(self.load_tape, "tapes...")
 
-    def load_tape(self):
-        self.display.clear()
-
-        self.tape = self.w.tape(self.choice)
-        self.tape['ticks'] = int(self.tape['ticks'])
-
-        image = Image.new('1', (self.width, self.height))
-        draw = ImageDraw.Draw(image)
-
-        draw.rectangle([(0, 0), (self.width, self.height)], outline = 0, fill = 0)
-
-        draw.text((0, 0), self.tape['name'], font = self.normal_font, fill = 255)
-
-        msg = ""
-        cmd1 = "1. OK"
-        cmd2 = "2. Never mind"
-
-        def ok():
-            self.update("getting ready...", top_line = True, full = True)
-            self.advance_to_current_progress()
-
-        def back():
-            self.tape = None
-            self.main_menu()
-
-        def start_a():
-            self.side = 'a'
-            self.update("getting ready...", top_line = True, full = True)
-            self.reason_for_waiting = 'start'
-            self.tc.start_of_tape()
-
-        def start_b():
-            self.side = 'b'
-            self.update("getting ready...", top_line = True, full = True)
-            self.reason_for_waiting = 'start'
-            self.tc.start_of_tape()
-
-        if not self.tape['side_a']['complete']:
-            if self.reason_for_waiting == 'start':
-                self.reason_for_waiting = None
-                self.ticks = 0
-                self.tape_screen()
-
     def do_a_record(message = "recording...", offset = 0):
         self.tape_screen(track_line = name, message = message)
 
@@ -247,7 +204,7 @@ class PyTape:
 
         self.record_start = self.millis()
 
-        self.process = subprocess.Popen(['play', self.filepath])
+        self.process = subprocess.Popen(['play', self.filepath, "trim %d" % offset])
 
         while self.process.poll() == None:
             pass
@@ -593,12 +550,6 @@ class PyTape:
         self.b3.when_released = ff
         self.b4.when_released = rw
 
-        self.text_items = [
-            if self.reason_for_waiting == 'start':
-                self.reason_for_waiting = None
-                self.ticks = 0
-                self.tape_screen()
-
     def do_a_record(message = "recording...", offset = 0):
         self.tape_screen(track_line = name, message = message)
 
@@ -677,45 +628,6 @@ class PyTape:
     def choose_tape(self):
         self.choices = self.w.tapes()
         self.choose_something(self.load_tape, "tapes...")
-
-    def load_tape(self):
-        self.display.clear()
-
-        self.tape = self.w.tape(self.choice)
-        self.tape['ticks'] = int(self.tape['ticks'])
-
-        image = Image.new('1', (self.width, self.height))
-        draw = ImageDraw.Draw(image)
-
-        draw.rectangle([(0, 0), (self.width, self.height)], outline = 0, fill = 0)
-
-        draw.text((0, 0), self.tape['name'], font = self.normal_font, fill = 255)
-
-        msg = ""
-        cmd1 = "1. OK"
-        cmd2 = "2. Never mind"
-
-        def ok():
-            self.update("getting ready...", top_line = True, full = True)
-            self.advance_to_current_progress()
-
-        def back():
-            self.tape = None
-            self.main_menu()
-
-        def start_a():
-            self.side = 'a'
-            self.update("getting ready...", top_line = True, full = True)
-                if len(self.text_entry) > 0:
-                    self.text_entry = self.text_entry[:-1]
-                    self.draw_text_entry(title)
-
-        self.b1.when_released = l
-        self.b2.when_released = r
-        self.b3.when_released = a
-        self.b4.when_released = b
-
-        self.draw_text_entry(title)
 
     def draw_text_entry(self, title):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
@@ -825,6 +737,3 @@ class PyTape:
 
         self.display.image(self.image)
         self.display.display()
-            if self.reason_for_waiting == 'start':
-                self.reason_for_waiting = None
-                self.ticks = 0
