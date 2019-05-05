@@ -34,11 +34,12 @@ class PyTape:
         self.do_monitoring = False
         self.thread = None
         self.process = None
-        self.record_start = 0
-        self.line_1_text = ""
-        self.line_2_text = ""
+        self.mid_line = ""
+        self.bottom_line = ""
         self.show_track_listing = False
         self.filepath = None
+        self.name = None
+        self.recording = False
 
         self.ignore_next = False
         self.lock = False
@@ -50,9 +51,6 @@ class PyTape:
 
         self.io1 = DigitalInputDevice('GPIO17')
         self.io1.when_activated = self.message_available
-
-        self.io2 = DigitalInputDevice('GPIO27')
-        self.io2.when_activated = self.end_of_tape
 
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
         self.display.begin()
@@ -85,10 +83,9 @@ class PyTape:
                     self.reason_for_waiting = None
                     self.create_tape()
                 elif self.reason_for_waiting == 'advance':
-                    print "adv: %d" % ticks
                     self.ticks = ticks
                     self.reason_for_waiting = None
-                    self.tape_screen(track_line = self.tick_status())
+                    self.tape_screen(message = "", track_line = self.tick_status())
                 elif self.tape != None:
                     self.tape_screen(extra_ticks = ticks)
         elif result == "end":
@@ -107,7 +104,7 @@ class PyTape:
 
                 ticks = int(vals[1])
                 probable_time_skip = 3 * ticks # ~3 ticks per second
-                do_a_record(message = "continuing...", offset = probable_time_skip)
+                self.record(message = "continuing...", offset = probable_time_skip)
             else:
                 self.w.update(self.tape['name'], self.side, complete = True)
                 self.choice = self.tape['name']
@@ -116,14 +113,12 @@ class PyTape:
             if self.reason_for_waiting == 'start':
                 self.reason_for_waiting = None
                 self.ticks = 0
-                self.tape_screen()
+                self.tape_screen(message = "", track_line = self.tick_status())
 
-    def do_a_record(message = "recording...", offset = 0):
-        self.tape_screen(track_line = name, message = message)
+    def record(self, message = "recording...", offset = 0):
+        self.tape_screen(message = message, track_line = self.name)
 
         self.tc.start_recording()
-
-        self.record_start = self.millis()
 
         self.process = subprocess.Popen(['play', self.filepath])
 
@@ -134,7 +129,7 @@ class PyTape:
 
         self.tc.stop_recording()
 
-        self.w.mark(self.tape['name'], name)
+        self.w.mark(self.tape['name'], self.name)
 
         os.remove(self.filepath)
 
@@ -152,7 +147,9 @@ class PyTape:
 
         self.ticks += ticks
 
-        tape = self.w.update(self.tape['name'], self.side, filename = name, ticks = ticks)
+        tape = self.w.update(self.tape['name'], self.side, filename = self.name, ticks = ticks)
+
+        self.name = None
 
         if tape:
             self.tape = tape
@@ -166,86 +163,6 @@ class PyTape:
         side = "side_%s" % self.side
         progress = reduce(lambda x, y: x + y, map(lambda x: int(x['ticks']), self.tape[side]['tracks']), 0)
         self.reason_for_waiting = 'advance'
-        print "prog: %d" % progress
-        self.tc.advance(progress)
-
-    def new_tape(self):
-        self.enter_text('name ur tape', self.check_tape_name)
-
-    def check_tape_name(self):
-        if self.w.check_tape_name(self.text_entry):
-            self.update('analyzing tape...', True, True)
-            self.reason_for_waiting = 'analysis'
-            self.tc.new_tape()
-        else:
-            self.update('tape name taken, try another...', True, True)
-            time.sleep(3)
-            self.new_tape()
-
-    def create_tape(self):
-        self.update('creating tape...', True, True)
-
-        if self.w.create(self.text_entry, self.ticks):
-            self.choice = self.text_entry
-            self.load_tape()
-            self.text_entry = ""
-            self.choice = ""
-        else:
-            self.main_menu()
-
-    def choose_tape(self):
-        self.choices = self.w.tapes()
-        self.choose_something(self.load_tape, "tapes...")
-
-    def do_a_record(message = "recording...", offset = 0):
-        self.tape_screen(track_line = name, message = message)
-
-        self.tc.start_recording()
-
-        self.record_start = self.millis()
-
-        self.process = subprocess.Popen(['play', self.filepath, "trim %d" % offset])
-
-        while self.process.poll() == None:
-            pass
-
-        self.process = None
-
-        self.tc.stop_recording()
-
-        self.w.mark(self.tape['name'], name)
-
-        os.remove(self.filepath)
-
-        self.filepath = None
-
-        result = self.tc.get_ticks()
-
-        vals = result.split(':')
-
-        while len(vals) != 2:
-            result = self.tc.get_ticks()
-            vals = result.split(':')
-
-        ticks = int(vals[1])
-
-        self.ticks += ticks
-
-        tape = self.w.update(self.tape['name'], self.side, filename = name, ticks = ticks)
-
-        if tape:
-            self.tape = tape
-
-        self.tape_screen(message = "", track_line = self.tick_status())
-
-    def tick_status(self):
-        return "(%d/%s)" % (self.ticks, self.tape['ticks'])
-
-    def advance_to_current_progress(self):
-        side = "side_%s" % self.side
-        progress = reduce(lambda x, y: x + y, map(lambda x: int(x['ticks']), self.tape[side]['tracks']), 0)
-        self.reason_for_waiting = 'advance'
-        print "prog: %d" % progress
         self.tc.advance(progress)
 
     def new_tape(self):
@@ -327,7 +244,7 @@ class PyTape:
         self.display.image(image)
         self.display.display()
 
-    def tape_screen(self, message = "", track_line = None, extra_ticks = 0, discern_track = False):
+    def tape_screen(self, message = None, track_line = None, extra_ticks = 0, discern_track = False):
         self.display.clear()
 
         image = Image.new('1', (self.width, self.height))
@@ -338,10 +255,10 @@ class PyTape:
         tape_name = self.tape['name'] + (" (side %s)" % self.side)
         draw.text((0, 0), tape_name, font = self.normal_font, fill = 255)
 
-        if track_line:
-            track = track_line
+        if track_line != None:
+            self.mid_line = track_line
         else:
-            if discern_track:
+            if self.show_track_listing:
                 t = 0
                 tracks = self.tape["side_%s" % self.side]['tracks']
                 track_times = []
@@ -350,14 +267,16 @@ class PyTape:
                     track_times.append([track['name'], t, t + track['ticks']])
                     t += track['ticks']
 
-                track = next((x[0] for x in track_times if self.ticks >= x[1] and self.ticks <= x[2]), 'no track')
-            else:
-                track = ""
+                self.mid_line = next((x[0] for x in track_times if self.ticks >= x[1] and self.ticks <= x[2]), 'no track')
 
-        draw.text((0, 8), track, font = self.normal_font, fill = 255)
+        draw.text((0, 8), self.mid_line, font = self.normal_font, fill = 255)
 
-        percentage = (self.ticks + extra_ticks) / int(self.tape['ticks'])
+        percentage = float(self.ticks + extra_ticks) / int(self.tape['ticks'])
         right_bound = percentage * (self.width - 2)
+
+        print percentage
+        print self.width - 2
+        print right_bound
 
         if right_bound < 1:
             right_bound = 1
@@ -366,8 +285,10 @@ class PyTape:
         draw.rectangle([(1, 17), (self.width - 2, 22)], outline = 0, fill = 0)
         draw.rectangle([(1, 17), (right_bound, 22)], outline = 0, fill = 1)
 
-        if message:
-            draw.text((0, 24), message, font = self.normal_font, fill = 255)
+        if message != None:
+            self.bottom_line = message
+        
+        draw.text((0, 24), self.bottom_line, font = self.normal_font, fill = 255)
 
         self.display.image(image)
         self.display.display()
@@ -382,10 +303,10 @@ class PyTape:
         self.thread.start()
 
     def stop_monitoring(self):
-        self.tape_screen("stopping...")
+        self.tape_screen(message = "stopping...")
         self.do_monitoring = False
         self.thread.join()
-        self.tape_screen()
+        self.tape_screen(track_line = self.tick_status(), message = "")
 
     def home(self):
         if self.do_monitoring:
@@ -395,26 +316,26 @@ class PyTape:
 
     def monitor(self):
         if self.tape == None:
-            self.tape_screen("nothing to monitor...")
+            self.tape_screen(message = "nothing to monitor...")
             return
 
         self.do_monitoring = True
 
         while self.do_monitoring:
-            self.tape_screen("checking the web...")
+            self.tape_screen(message = "checking the web...")
 
             uploads = self.w.uploads(self.tape['name'])
 
             if len(uploads) > 0:
-                name = uploads[0]
+                self.name = uploads[0]
 
-                this.filepath = "/home/pi/%s" % name
+                self.filepath = "/home/pi/%s" % self.name
 
-                self.tape_screen(track_line = name, message = "downloading...")
+                self.tape_screen(message = "downloading...", track_line = self.name)
 
-                self.w.download(self.tape['name'], name, filepath)
+                self.w.download(self.tape['name'], self.name, self.filepath)
 
-                self.do_a_record()
+                self.record()
             else:
                 self.tape_screen("nothing to do!")
 
@@ -484,30 +405,7 @@ class PyTape:
 
             self.lock = False
 
-        self.b1.when_released = nt
-        self.b2.when_released = lt
-        self.b3.when_released = wifi
-        self.b4.when_released = self.deck
-
-        self.text_items = ["1. New Tape", "2. Load Tape", "3. Wifi", "4. Deck"]
-        self.draw_menu()
-
-    def deck(self):
-        def p():
-            if self.lock:
-                return
-
-            self.lock = True
-
-            if self.b2.is_pressed:
-                self.ignore_next = True
-                self.tc.rec()
-            else:
-                self.tc.play()
-
-            self.lock = False
-
-        def s():
+        def rec():
             if self.lock:
                 return
             
@@ -518,116 +416,126 @@ class PyTape:
                 self.lock = False
                 return
             else:
-                self.tc.stop()
+                if self.recording:
+                    self.recording = False
+                    self.tc.stop_recording()
+                else:
+                    self.recording = True
+                    self.tc.start_recording()
 
             self.lock = False
 
-        def ff():
-            if self.lock:
-                return
+
+        self.b1.when_released = nt
+        self.b2.when_released = lt
+        self.b3.when_released = wifi
+        self.b4.when_released = rec
+
+        self.text_items = ["1. New Tape", "2. Load Tape", "3. Wifi", "4. Deck"]
+        self.draw_menu()
             
-            self.lock = True
+    def choose_something(self, callback, title=None):
+        self.menu_index = 0
+        self.menu_start = 0
+        self.menu_end = len(self.choices) - 1 if len(self.choices) < 3 else 2
 
-            if self.b2.is_pressed:
-                self.ignore_next = True
-                self.lock = False
-                self.main_menu()
-            else:
-                self.tc.ff()
+        def adjust_indices():
+            if self.menu_index < self.menu_start:
+                self.menu_start = self.menu_index
+                self.menu_end = self.menu_index + 2
+            elif self.menu_index > self.menu_end:
+                self.menu_start = self.menu_index - 2
+                self.menu_end = self.menu_index
 
-            self.lock = False
+        def u():
+            if self.menu_index > 0:
+                self.menu_index -= 1
+                adjust_indices()
+                self.draw_choices(title)
 
-        def rw():
-            if self.lock:
-                return
+        def d():
+            if self.menu_index < len(self.choices) - 1:
+                self.menu_index += 1
+                adjust_indices()
+                self.draw_choices(title)
 
-            self.lock = True
-            self.tc.rw()
-            self.lock = False
+        def c():
+            self.choice = self.choices[self.menu_index]
+            callback()
 
-        self.b1.when_released = p
-        self.b2.when_released = s
-        self.b3.when_released = ff
-        self.b4.when_released = rw
-
-    def do_a_record(message = "recording...", offset = 0):
-        self.tape_screen(track_line = name, message = message)
-
-        self.tc.start_recording()
-
-        self.record_start = self.millis()
-
-        self.process = subprocess.Popen(['play', self.filepath])
-
-        while self.process.poll() == None:
-            pass
-
-        self.process = None
-
-        self.tc.stop_recording()
-
-        self.w.mark(self.tape['name'], name)
-
-        os.remove(self.filepath)
-
-        self.filepath = None
-
-        result = self.tc.get_ticks()
-
-        vals = result.split(':')
-
-        while len(vals) != 2:
-            result = self.tc.get_ticks()
-            vals = result.split(':')
-
-        ticks = int(vals[1])
-
-        self.ticks += ticks
-
-        tape = self.w.update(self.tape['name'], self.side, filename = name, ticks = ticks)
-
-        if tape:
-            self.tape = tape
-
-        self.tape_screen(message = "", track_line = self.tick_status())
-
-    def tick_status(self):
-        return "(%d/%s)" % (self.ticks, self.tape['ticks'])
-
-    def advance_to_current_progress(self):
-        side = "side_%s" % self.side
-        progress = reduce(lambda x, y: x + y, map(lambda x: int(x['ticks']), self.tape[side]['tracks']), 0)
-        self.reason_for_waiting = 'advance'
-        print "prog: %d" % progress
-        self.tc.advance(progress)
-
-    def new_tape(self):
-        self.enter_text('name ur tape', self.check_tape_name)
-
-    def check_tape_name(self):
-        if self.w.check_tape_name(self.text_entry):
-            self.update('analyzing tape...', True, True)
-            self.reason_for_waiting = 'analysis'
-            self.tc.new_tape()
-        else:
-            self.update('tape name taken, try another...', True, True)
-            time.sleep(3)
-            self.new_tape()
-
-    def create_tape(self):
-        self.update('creating tape...', True, True)
-
-        if self.w.create(self.text_entry, self.ticks):
-            self.choice = self.text_entry
-            self.load_tape()
-            self.text_entry = ""
+        def b():
             self.choice = ""
-        else:
             self.main_menu()
 
-    def choose_tape(self):
-        self.choices = self.w.tapes()
-        self.choose_something(self.load_tape, "tapes...")
+        self.b1.when_released = u
+        self.b2.when_released = d
+        self.b3.when_released = c
+        self.b4.when_released = b
+
+        self.draw_choices(title)
+
+    def draw_choices(self, title="3. Go 4. Back"):
+        self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
+        self.draw.text((0, 0), title, font=self.normal_font, fill=255)
+
+        y = 8
+
+        for idx in range(self.menu_start, self.menu_end + 1):
+            leader = "-> " if idx == self.menu_index else "   "
+            self.draw.text((0, y), leader + self.choices[idx], font=self.normal_font, fill=255)
+            y += 8
+
+        self.display.image(self.image)
+        self.display.display()
+
+    def choose_network(self):
+        cmd = "sudo iw dev wlan0 scan | grep SSID"
+
+        self.choices = subprocess.check_output(cmd, shell = True ).split('\n')
+        self.choices = filter(lambda x: len(x) > 0, self.choices)
+        self.choices = map(lambda x: x.split(':')[1].strip(), self.choices)
+
+        self.choose_something(self.network_chosen, "select network...")
+
+    def network_chosen(self):
+        self.enter_text('enter password....', self.connect)
+
+    def enter_text(self, title, callback, args={}):
+        self.text_entry = ""
+
+        def l():
+            if self.char_index > 0:
+                self.char_index -= 1
+                self.draw_text_entry(title)
+
+        def r():
+            if self.char_index < len(self.chars):
+                self.char_index += 1
+                self.draw_text_entry(title)
+
+        def a():
+            if self.ignore_next:
+                self.ignore_next = False
+                return
+            else:
+                self.text_entry += self.chars[self.char_index]
+                self.draw_text_entry(title)
+
+        def b():
+            if self.b3.is_pressed:
+                self.ignore_next = True
+                callback()
+            else:
+                if len(self.text_entry) > 0:
+                    self.text_entry = self.text_entry[:-1]
+                    self.draw_text_entry(title)
+
+        self.b1.when_released = l
+        self.b2.when_released = r
+        self.b3.when_released = a
+        self.b4.when_released = b
+
+        self.draw_text_entry(title)
 
     def draw_text_entry(self, title):
         self.draw.rectangle((0, 0, self.width, self.height), outline = 0, fill = 0)
@@ -737,3 +645,8 @@ class PyTape:
 
         self.display.image(self.image)
         self.display.display()
+
+if __name__ == "__main__":
+    pytape = PyTape()
+    pytape.main_menu()
+    pause()
