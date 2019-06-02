@@ -7,61 +7,71 @@ class TapeControl:
         self.address = 0x04
 
     def write(self, value):
+        print "1"
+        print "value: %d" % value
+
         try:
             return self.bus.write_byte(self.address, value)
-        except IOError:
+        except IOError as e:
+            print e
+            print "crazy pep"
             return -1
 
     def write_with_retry(self, value):
-        response = -1
-        count = 0
-
-        while response == -1 and count < 10:
-            response = self.write(value)
-            count += 1
-
-        return response
+        print "2"
+        return self.write(value)
 
     def write_bytes(self, word):
+        print "3"
+
         data = map(lambda x: ord(x), list(word)) 
 
         try:
             return self.bus.write_i2c_block_data(self.address, 0, data)
-        except IOError:
+        except IOError as e:
+            print e
+            print "crazy bleep"
             return -1
 
     def write_bytes_with_retry(self, word):
-        response = -1
-        count = 0
-
-        while response == -1 and count < 10:
-            response = self.write_bytes(word)
-            count += 1
-
-        return response
+        print "4"
+        return self.write_bytes(word)
 
     def read(self):
+        print "5"
+
         try:
             return self.bus.read_byte(self.address)
-        except IOError:
+        except IOError as e:
+            print e
+            print "crazy blep"
             return -1
 
     def read_bytes(self):
+        print "6"
+
         try:
             return self.bus.read_i2c_block_data(self.address, 0)
-        except IOError:
+        except IOError as e:
+            print "HELP"
+            print e
             return []
 
     def await_bytes_response(self):
+        print "7"
+
         response = -1
 
         while response == -1:
+            print "7.5"
             time.sleep(0.5)
             response = self.read_bytes()
 
         return response
 
     def await_response(self):
+        print "8"
+
         response = 0
 
         while response == 0:
@@ -167,7 +177,13 @@ class TapeControl:
         return int(self.string_from_byte_array(byte_array))
 
     def string_from_byte_array(self, byte_array):
-        return "".join(map(lambda x: chr(x), [x for x in byte_array if x != 255]))
+        try:
+            print "no way"
+            print byte_array
+            return "".join(map(lambda x: chr(x), [x for x in byte_array if x != 255]))
+        except TypeError as e:
+            print e
+            return ""
 
 if __name__ == "__main__":
     tc = TapeControl()

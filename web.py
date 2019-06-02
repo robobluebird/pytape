@@ -44,6 +44,16 @@ class Web:
 
     def update(self, name, side, complete = False, filename = None, ticks = None):
         url = "%s/tapes/%s/side/%s" % (self.base_url, name, side)
+
+        print "-- updating/ --"
+        print name
+        print side
+        print complete
+        print filename
+        print ticks
+        print "-- /updating --"
+        print ""
+
         r = requests.put(url, data = {'side': side, 'complete': complete, 'filename': filename, 'ticks': ticks}, headers = self.headers)
 
         if r.status_code == 200:

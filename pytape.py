@@ -40,6 +40,8 @@ class PyTape:
         self.filepath = None
         self.name = None
         self.recording = False
+        self.killed_process = False
+        self.partial_ticks = None
 
         self.ignore_next = False
         self.lock = False
@@ -50,7 +52,7 @@ class PyTape:
         self.b4 = Button('GPIO12')
 
         self.io1 = DigitalInputDevice('GPIO17')
-        self.io1.when_activated = self.message_available
+        self.io1.when_deactivated = self.message_available
 
         self.display = Adafruit_SSD1306.SSD1306_128_32(rst=None)
         self.display.begin()
@@ -70,7 +72,11 @@ class PyTape:
         self.w = Web(owner=self)
 
     def message_available(self):
+        print "heee"
+
         result = self.tc.get_message()
+
+        print result
 
         if ":" in result:
             key, value = result.split(':')
@@ -88,24 +94,44 @@ class PyTape:
                     self.tape_screen(message = "", track_line = self.tick_status())
                 elif self.tape != None:
                     self.tape_screen(extra_ticks = ticks)
-        elif result == "end":
+        elif result == "finished":
+            print "hello"
+
             if self.process != None:
+                self.do_monitoring = False
+                self.killed_process = True
                 self.process.kill()
-                self.process = None
 
             result = self.tc.get_ticks()
+
+            print result
 
             if self.side == 'a':
                 vals = result.split(':')
 
                 while len(vals) != 2:
+                    print "blep2"
                     result = self.tc.get_ticks()
                     vals = result.split(':')
 
                 ticks = int(vals[1])
+
+                print ticks
+
                 probable_time_skip = 3 * ticks # ~3 ticks per second
-                self.record(message = "continuing...", offset = probable_time_skip)
+
+                self.partial_ticks = ticks
+
+                print "ticks that happened before END: %d" % ticks
+                print "probable time skip: %d" % probable_time_skip
+                
+                msg = "End of tape! Continue on Side B or quit now?"
+                self.update(msg, full = True, top_line = False)
+
+                self.wait_for_tape_flip(probable_time_skip)
             else:
+                print "here?"
+
                 self.w.update(self.tape['name'], self.side, complete = True)
                 self.choice = self.tape['name']
                 self.load_tape()
@@ -114,18 +140,49 @@ class PyTape:
                 self.reason_for_waiting = None
                 self.ticks = 0
                 self.tape_screen(message = "", track_line = self.tick_status())
+            elif self.reason_for_waiting == 'flip':
+                self.reason_for_waiting = None
+                self.ticks = 0
+                self.record(message = "continuing...", offset = self.partial_ticks)
+
+    def continue_track(self):
+        print "continuing..."
+        self.w.update(self.tape['name'], self.side, complete = True)
+        self.choice = self.tape['name']
+        self.reason_for_waiting = "flip"
+        self.load_tape()
+
+    def dont_continue_track(self):
+        print "not continuing. completing side."
+        self.w.update(self.tape['name'], self.side, complete = True)
+        self.reason_for_waiting = "start"
+        self.tc.start_of_tape
+
+    def wait_for_tape_flip(self, probable_time_skip):
+        print "okay"
+
+        self.b1.when_released = self.continue_track
+        self.b2.when_released = self.dont_continue_track
 
     def record(self, message = "recording...", offset = 0):
         self.tape_screen(message = message, track_line = self.name)
 
         self.tc.start_recording()
 
-        self.process = subprocess.Popen(['play', self.filepath])
+        if offset > 0:
+            self.process = subprocess.Popen(['play', '-q', self.filepath, 'trim', offset])
+            self.partial_ticks = None
+        else:
+            self.process = subprocess.Popen(['play', '-q', self.filepath])
 
         while self.process.poll() == None:
             pass
 
         self.process = None
+
+        if self.killed_process:
+            self.killed_process = False
+            return
 
         self.tc.stop_recording()
 
@@ -140,6 +197,7 @@ class PyTape:
         vals = result.split(':')
 
         while len(vals) != 2:
+            print "blep1"
             result = self.tc.get_ticks()
             vals = result.split(':')
 
@@ -159,10 +217,15 @@ class PyTape:
     def tick_status(self):
         return "(%d/%s)" % (self.ticks, self.tape['ticks'])
 
-    def advance_to_current_progress(self):
+    def advance_to_current_progress(self, alternate_reason = None):
         side = "side_%s" % self.side
         progress = reduce(lambda x, y: x + y, map(lambda x: int(x['ticks']), self.tape[side]['tracks']), 0)
-        self.reason_for_waiting = 'advance'
+
+        if alternate_reason != None:
+            self.reason_for_waiting = alternate_reason
+        else:
+            self.reason_for_waiting = 'advance'
+
         self.tc.advance(progress)
 
     def new_tape(self):
@@ -193,7 +256,7 @@ class PyTape:
         self.choices = self.w.tapes()
         self.choose_something(self.load_tape, "tapes...")
 
-    def load_tape(self):
+    def load_tape(self, alternate_reason = None):
         self.display.clear()
 
         self.tape = self.w.tape(self.choice)
@@ -211,7 +274,7 @@ class PyTape:
 
         def ok():
             self.update("getting ready...", top_line = True, full = True)
-            self.advance_to_current_progress()
+            self.advance_to_current_progress(alternate_reason)
 
         def back():
             self.tape = None
@@ -238,8 +301,6 @@ class PyTape:
         self.b4.when_released = self.do_nothing
 
         draw.text((0, 8), msg, font = self.normal_font, fill = 255)
-        draw.text((0, 16), msg, font = self.normal_font, fill = 255)
-        draw.text((0, 24), msg, font = self.normal_font, fill = 255)
 
         self.display.image(image)
         self.display.display()
@@ -273,10 +334,6 @@ class PyTape:
 
         percentage = float(self.ticks + extra_ticks) / int(self.tape['ticks'])
         right_bound = percentage * (self.width - 2)
-
-        print percentage
-        print self.width - 2
-        print right_bound
 
         if right_bound < 1:
             right_bound = 1
@@ -322,6 +379,7 @@ class PyTape:
         self.do_monitoring = True
 
         while self.do_monitoring:
+            print "melp"
             self.tape_screen(message = "checking the web...")
 
             uploads = self.w.uploads(self.tape['name'])
