@@ -136,21 +136,27 @@ class PyTape:
                 self.choice = self.tape['name']
                 self.load_tape()
         elif result == "start":
+            print "bleppity blep"
+            print self.reason_for_waiting
+
             if self.reason_for_waiting == 'start':
+                print "back to the start"
                 self.reason_for_waiting = None
                 self.ticks = 0
                 self.tape_screen(message = "", track_line = self.tick_status())
             elif self.reason_for_waiting == 'flip':
+                print "why in the..."
                 self.reason_for_waiting = None
                 self.ticks = 0
                 self.record(message = "continuing...", offset = self.partial_ticks)
 
     def continue_track(self):
         print "continuing..."
-        self.w.update(self.tape['name'], self.side, complete = True)
+        print self.filepath
+        print self.partial_ticks
+        self.w.update(self.tape['name'], self.side, complete = True, filename = self.name, ticks = self.partial_ticks)
         self.choice = self.tape['name']
-        self.reason_for_waiting = "flip"
-        self.load_tape()
+        self.load_tape(alternate_reason = "flip")
 
     def dont_continue_track(self):
         print "not continuing. completing side."
@@ -165,12 +171,16 @@ class PyTape:
         self.b2.when_released = self.dont_continue_track
 
     def record(self, message = "recording...", offset = 0):
+        print "doing a record"
+        print offset
+
         self.tape_screen(message = message, track_line = self.name)
 
         self.tc.start_recording()
 
         if offset > 0:
-            self.process = subprocess.Popen(['play', '-q', self.filepath, 'trim', offset])
+            print "doing offset"
+            self.process = subprocess.Popen(['play', '-q', self.filepath, 'trim', str(offset)])
             self.partial_ticks = None
         else:
             self.process = subprocess.Popen(['play', '-q', self.filepath])
@@ -179,6 +189,8 @@ class PyTape:
             pass
 
         self.process = None
+
+        print "done recording"
 
         if self.killed_process:
             self.killed_process = False
@@ -205,7 +217,7 @@ class PyTape:
 
         self.ticks += ticks
 
-        tape = self.w.update(self.tape['name'], self.side, filename = self.name, ticks = ticks)
+        tape = self.w.update(self.tape['name'], self.side, filename = ("%s (cont)" % self.name), ticks = ticks)
 
         self.name = None
 

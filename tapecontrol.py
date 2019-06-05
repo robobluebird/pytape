@@ -178,7 +178,6 @@ class TapeControl:
 
     def string_from_byte_array(self, byte_array):
         try:
-            print "no way"
             print byte_array
             return "".join(map(lambda x: chr(x), [x for x in byte_array if x != 255]))
         except TypeError as e:
