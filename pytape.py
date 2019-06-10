@@ -93,6 +93,8 @@ class PyTape:
                     self.reason_for_waiting = None
                     self.tape_screen(message = "", track_line = self.tick_status())
                 elif self.tape != None:
+                    print "ehlo"
+                    print ticks
                     self.tape_screen(extra_ticks = ticks)
         elif result == "finished":
             print "hello"
@@ -118,17 +120,14 @@ class PyTape:
 
                 print ticks
 
-                probable_time_skip = 3 * ticks # ~3 ticks per second
-
                 self.partial_ticks = ticks
 
                 print "ticks that happened before END: %d" % ticks
-                print "probable time skip: %d" % probable_time_skip
                 
                 msg = "End of tape! Continue on Side B or quit now?"
                 self.update(msg, full = True, top_line = False)
 
-                self.wait_for_tape_flip(probable_time_skip)
+                self.wait_for_tape_flip()
             else:
                 print "here?"
 
@@ -148,12 +147,14 @@ class PyTape:
                 print "why in the..."
                 self.reason_for_waiting = None
                 self.ticks = 0
-                self.record(message = "continuing...", offset = self.partial_ticks)
+                self.record(message = "continuing...", offset_ticks = self.partial_ticks)
+                self.partial_ticks = None
 
     def continue_track(self):
         print "continuing..."
         print self.filepath
         print self.partial_ticks
+        print "...gniunitnoc"
         self.w.update(self.tape['name'], self.side, complete = True, filename = self.name, ticks = self.partial_ticks)
         self.choice = self.tape['name']
         self.load_tape(alternate_reason = "flip")
@@ -164,24 +165,24 @@ class PyTape:
         self.reason_for_waiting = "start"
         self.tc.start_of_tape
 
-    def wait_for_tape_flip(self, probable_time_skip):
+    def wait_for_tape_flip(self):
         print "okay"
 
         self.b1.when_released = self.continue_track
         self.b2.when_released = self.dont_continue_track
 
-    def record(self, message = "recording...", offset = 0):
+    def record(self, message = "recording...", offset_ticks = 0):
         print "doing a record"
-        print offset
+        print offset_ticks
+        probable_time_skip = offset_ticks / 3 # ~3 ticks per second
+        print "probable time skip: %d" % probable_time_skip
 
         self.tape_screen(message = message, track_line = self.name)
-
         self.tc.start_recording()
 
-        if offset > 0:
+        if probable_time_skip > 0:
             print "doing offset"
-            self.process = subprocess.Popen(['play', '-q', self.filepath, 'trim', str(offset)])
-            self.partial_ticks = None
+            self.process = subprocess.Popen(['play', '-q', self.filepath, 'trim', str(probable_time_skip)])
         else:
             self.process = subprocess.Popen(['play', '-q', self.filepath])
 
