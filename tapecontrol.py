@@ -41,7 +41,9 @@ class TapeControl:
         print "5"
 
         try:
-            return self.bus.read_byte(self.address)
+            res = self.bus.read_byte(self.address)
+            print res
+            return res
         except IOError as e:
             print e
             print "crazy blep"

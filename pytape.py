@@ -12,6 +12,7 @@ from gpiozero import Button, DigitalInputDevice
 from signal import pause
 from threading import Thread
 import os
+import re
 
 from tapecontrol import TapeControl 
 from web import Web
@@ -33,6 +34,7 @@ class PyTape:
         self.side = None
         self.do_monitoring = False
         self.thread = None
+        self.command_thread = None
         self.process = None
         self.mid_line = ""
         self.bottom_line = ""
@@ -42,6 +44,7 @@ class PyTape:
         self.recording = False
         self.killed_process = False
         self.partial_ticks = None
+        self.conservative_mode = True
 
         self.ignore_next = False
         self.lock = False
@@ -70,6 +73,8 @@ class PyTape:
 
         self.tc = TapeControl()
         self.w = Web(owner=self)
+        # self.start_command_monitoring()
+        print "Go!"
 
     def message_available(self):
         print "heee"
@@ -97,12 +102,16 @@ class PyTape:
                     print ticks
                     self.tape_screen(extra_ticks = ticks)
         elif result == "finished":
-            print "hello"
+            print "hello"    
 
             if self.process != None:
-                self.do_monitoring = False
+                self.stop_monitoring()
                 self.killed_process = True
                 self.process.kill()
+
+            if self.conservative_mode:
+                self.loop_play()
+                return
 
             result = self.tc.get_ticks()
 
@@ -131,7 +140,7 @@ class PyTape:
             else:
                 print "here?"
 
-                self.w.update(self.tape['name'], self.side, complete = True)
+                self.w.update(self.tape['name'], self.side, complete = "true")
                 self.choice = self.tape['name']
                 self.load_tape()
         elif result == "start":
@@ -149,21 +158,32 @@ class PyTape:
                 self.ticks = 0
                 self.record(message = "continuing...", offset_ticks = self.partial_ticks)
                 self.partial_ticks = None
+            elif self.reason_for_waiting == "loop":
+                self.b4.when_released = self.stop_loop_play
+                self.process = subprocess.Popen(["arecord", "|", "aplay"])
+                print "playing..."
+                self.show_track_listing = True 
+                self.tape_screen(message = "loop play: enjoy!")
+                self.tc.play()
+
+    def stop_loop_play(self):
+        self.show_track_listing = False
+        self.home()
 
     def continue_track(self):
         print "continuing..."
         print self.filepath
         print self.partial_ticks
         print "...gniunitnoc"
-        self.w.update(self.tape['name'], self.side, complete = True, filename = self.name, ticks = self.partial_ticks)
+        self.w.update(self.tape['name'], self.side, complete = "true", filename = self.name, ticks = self.partial_ticks)
         self.choice = self.tape['name']
         self.load_tape(alternate_reason = "flip")
 
     def dont_continue_track(self):
         print "not continuing. completing side."
-        self.w.update(self.tape['name'], self.side, complete = True)
+        self.w.update(self.tape['name'], self.side, complete = "true")
         self.reason_for_waiting = "start"
-        self.tc.start_of_tape
+        self.tc.start_of_tape()
 
     def wait_for_tape_flip(self):
         print "okay"
@@ -177,7 +197,7 @@ class PyTape:
         probable_time_skip = offset_ticks / 3 # ~3 ticks per second
         print "probable time skip: %d" % probable_time_skip
 
-        self.tape_screen(message = message, track_line = self.name)
+        self.tape_screen(message = message, track_line = "rec: " % self.name)
         self.tc.start_recording()
 
         if probable_time_skip > 0:
@@ -368,6 +388,28 @@ class PyTape:
         self.b3.when_released = self.do_nothing
         self.b4.when_released = self.home
 
+    def start_command_monitoring(self):
+        self.command_thread = Thread(target = self.monitor_for_commands)
+        self.command_thread.start()
+
+    def monitor_for_commands(self):
+        while True:
+            command = self.w.get_command()
+
+            print command
+
+            if command:
+                if command == "reboot":
+                    subprocess.check_output("sudo reboot now", shell = True)
+                elif command == "none":
+                    print "no command"
+            else:
+                print command
+                print "problem with command"
+
+            time.sleep(30)
+
+
     def start_monitoring(self):
         self.thread = Thread(target = self.monitor)
         self.thread.start()
@@ -375,20 +417,35 @@ class PyTape:
     def stop_monitoring(self):
         self.tape_screen(message = "stopping...")
         self.do_monitoring = False
-        self.thread.join()
+
+        if self.thread:
+            self.thread.join()
+
         self.tape_screen(track_line = self.tick_status(), message = "")
 
     def home(self):
         if self.do_monitoring:
             self.stop_monitoring()
+
+        if self.process:
+            self.killed_process = True
+            self.process.kill()
+
         self.tape = None
         self.main_menu()
+
+    def loop_play(self):
+        self.tape_screen(message = "rewinding for loop play", track_line = "out of space")
+        self.reason_for_waiting = "loop"
+        self.tc.start_of_tape()
+        print "something"
 
     def monitor(self):
         if self.tape == None:
             self.tape_screen(message = "nothing to monitor...")
             return
 
+        init_loop_play = False
         self.do_monitoring = True
 
         while self.do_monitoring:
@@ -399,18 +456,38 @@ class PyTape:
 
             if len(uploads) > 0:
                 self.name = uploads[0]
-
                 self.filepath = "/home/pi/%s" % self.name
+                (filename, person, track_length) = self.name.split("-")
 
-                self.tape_screen(message = "downloading...", track_line = self.name)
+                probable_tick_length = float(track_length) * 3 # ~3 ticks per second
 
-                self.w.download(self.tape['name'], self.name, self.filepath)
+                print "probable tick length = %.3f" % probable_tick_length
 
-                self.record()
+                remaining_space = self.tape["ticks"] - self.ticks
+
+                print "remaining ticks = %d" % remaining_space
+
+                if track_length > 0.0 and remaining_space - probable_tick_length >= 0:
+                    print "CAN record, %.3f track len, %.3f prob_tick_len, %d remaining ticks!"
+                    self.tape_screen(message = "re: %s" % person, track_line = "dl: %s" % filename)
+                    self.w.download(self.tape['name'], self.name, self.filepath)
+                    print "recording!"
+                    self.record(message = ("re: %s" % person))
+                else:
+                    print "can't record, %s track len, %.3f prob_tick_len, %d remaining ticks!" % (track_length, probable_tick_length, remaining_space)
+
+                    # self.w.update(self.tape['name'], self.side, complete = "true")
+                    self.do_monitoring = False
+                    init_loop_play = True
             else:
                 self.tape_screen("nothing to do!")
 
-            time.sleep(10)
+            
+            if not init_loop_play:
+                time.sleep(10)
+
+        if init_loop_play:
+            self.loop_play()
 
     def connection_info(self):
         self.draw.rectangle([(0, 0), (self.width, self.height)], outline = 0, fill = 0)
@@ -589,8 +666,11 @@ class PyTape:
                 self.ignore_next = False
                 return
             else:
-                self.text_entry += self.chars[self.char_index]
-                self.draw_text_entry(title)
+                if self.b2.is_pressed:
+                    self.home()
+                else:
+                    self.text_entry += self.chars[self.char_index]
+                    self.draw_text_entry(title)
 
         def b():
             if self.b3.is_pressed:

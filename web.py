@@ -13,13 +13,26 @@ class Web:
         self.base_url = 'https://sheltered-forest-46485.herokuapp.com'
         self.headers = {'Accept': 'application/json'}
 
+    def get_command(self):
+        url = "%s/commands/consume?password=%s" % (self.base_url, os.environ["COMMAND_PASSWORD"])
+        r = requests.post(url, headers = self.headers)
+
+        print r
+
+        if r.status_code == 200:
+            print r.json()
+            print r.json()["command"]
+            return r.json()["command"]
+        else:
+            print r.status_code
+            print r.json()
+
     def uploads(self, tape_id):
         r = requests.get("%s/tapes/%s/uploads" % (self.base_url, tape_id), headers = self.headers)
         return r.json()['uploads']
 
     def download(self, tape_id, name, filepath):
         url = "%s/tapes/%s/uploads/%s" % (self.base_url, tape_id, name)
-        r = requests.get(url,  headers = self.headers)
         response = requests.get(url, stream=True)
         handle = open(filepath, "wb")
         for chunk in response.iter_content(chunk_size=512):
@@ -27,6 +40,14 @@ class Web:
                 handle.write(chunk)
         handle.close()
         return handle.closed
+
+    def info(self, tape_id, name):
+        url = "%s/tapes/%s/uploads/%s/info" % (self.base_url, tape_id, name)
+        r = requests.get(url,  headers = self.headers)
+        j = r.json()
+        print "infoman"
+        print j
+        return (j["person"], float(j["length"]))
 
     def mark(self, tape_id, name):
         url = "%s/tapes/%s/uploads/%s/ok" % (self.base_url, tape_id, name)
