@@ -3,7 +3,11 @@ import time
 
 class TapeControl:
     def __init__(self):
+        self.redo_connection()
+
+    def redo_connection(self):
         self.bus = smbus.SMBus(1)
+        time.sleep(1)
         self.address = 0x04
 
     def write(self, value):
@@ -15,6 +19,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy pep"
+            self.redo_connection()
             return -1
 
     def write_with_retry(self, value):
@@ -31,6 +36,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy bleep"
+            self.redo_connection()
             return -1
 
     def write_bytes_with_retry(self, word):
@@ -47,6 +53,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy blep"
+            self.redo_connection()
             return -1
 
     def read_bytes(self):
@@ -57,6 +64,7 @@ class TapeControl:
         except IOError as e:
             print "HELP"
             print e
+            self.redo_connection()
             return []
 
     def await_bytes_response(self):

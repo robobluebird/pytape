@@ -159,9 +159,11 @@ class PyTape:
                 self.record(message = "continuing...", offset_ticks = self.partial_ticks)
                 self.partial_ticks = None
             elif self.reason_for_waiting == "loop":
+                print "loop start..."
+                self.reason_for_waiting = None
+                self.ticks = 0
                 self.b4.when_released = self.stop_loop_play
                 self.process = subprocess.Popen(["arecord", "|", "aplay"])
-                print "playing..."
                 self.show_track_listing = True 
                 self.tape_screen(message = "loop play: enjoy!")
                 self.tc.play()
@@ -169,6 +171,7 @@ class PyTape:
     def stop_loop_play(self):
         self.show_track_listing = False
         self.home()
+        self.tc.stop()
 
     def continue_track(self):
         print "continuing..."
