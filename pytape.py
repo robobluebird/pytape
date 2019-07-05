@@ -26,7 +26,6 @@ class PyTape:
         self.chars = "AaBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz0123456789~!@#$%^&*()_+-=[]\\{}E9|;':\",./<>?"
         self.char_index = 0
         self.text_entry = ""
-        self.name = ""
         self.current_tick = 0
         self.ticks = 0
         self.reason_for_waiting = None
@@ -41,6 +40,7 @@ class PyTape:
         self.show_track_listing = False
         self.filepath = None
         self.name = None
+        self.nice_name = None
         self.recording = False
         self.killed_process = False
         self.partial_ticks = None
@@ -200,7 +200,10 @@ class PyTape:
         probable_time_skip = offset_ticks / 3 # ~3 ticks per second
         print "probable time skip: %d" % probable_time_skip
 
-        self.tape_screen(message = message, track_line = "rec: " % self.name)
+        print "returning..."
+        return
+
+        self.tape_screen(message = message, track_line = "REC: %s" % self.nice_name)
         self.tc.start_recording()
 
         if probable_time_skip > 0:
@@ -241,9 +244,10 @@ class PyTape:
 
         self.ticks += ticks
 
-        tape = self.w.update(self.tape['name'], self.side, filename = ("%s (cont)" % self.name), ticks = ticks)
+        tape = self.w.update(self.tape['name'], self.side, filename = ("%s" % self.name), ticks = ticks)
 
         self.name = None
+        self.nice_name = None
 
         if tape:
             self.tape = tape
@@ -452,30 +456,37 @@ class PyTape:
         self.do_monitoring = True
 
         while self.do_monitoring:
-            print "melp"
             self.tape_screen(message = "checking the web...")
 
             uploads = self.w.uploads(self.tape['name'])
 
             if len(uploads) > 0:
-                self.name = uploads[0]
-                self.filepath = "/home/pi/%s" % self.name
-                (filename, person, track_length) = self.name.split("-")
+                (filename, person, track_length) = re.split(r"(?<!\|)-", uploads[0])
 
+                filename = filename.replace("\-", "-")
+                person = person.replace("\-", "-")
+
+                print filename
+                print person
+
+                self.name = uploads[0]
+                self.nice_name = filename
+                self.filepath = "/home/pi/%s" % filename
                 probable_tick_length = float(track_length) * 3 # ~3 ticks per second
 
                 print "probable tick length = %.3f" % probable_tick_length
 
-                remaining_space = self.tape["ticks"] - self.ticks
+                remaining_space = int(self.tape["ticks"]) - self.ticks
 
                 print "remaining ticks = %d" % remaining_space
 
                 if track_length > 0.0 and remaining_space - probable_tick_length >= 0:
-                    print "CAN record, %.3f track len, %.3f prob_tick_len, %d remaining ticks!"
-                    self.tape_screen(message = "re: %s" % person, track_line = "dl: %s" % filename)
+                    print "CAN record, %.3f track len, %.3f prob_tick_len, %d remaining ticks!", track_length, probable_tick_length, remaining_space
+                    self.tape_screen(message = "RE: %s" % person, track_line = "DL: %s" % filename)
                     self.w.download(self.tape['name'], self.name, self.filepath)
+
                     print "recording!"
-                    self.record(message = ("re: %s" % person))
+                    self.record(message = ("RE: %s" % person))
                 else:
                     print "can't record, %s track len, %.3f prob_tick_len, %d remaining ticks!" % (track_length, probable_tick_length, remaining_space)
 

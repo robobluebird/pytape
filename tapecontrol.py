@@ -1,11 +1,9 @@
 import smbus
 import time
+import subprocess
 
 class TapeControl:
     def __init__(self):
-        self.redo_connection()
-
-    def redo_connection(self):
         self.bus = smbus.SMBus(1)
         time.sleep(1)
         self.address = 0x04
@@ -19,7 +17,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy pep"
-            self.redo_connection()
+            subprocess.call(['i2cdetect', '-y', '1'])
             return -1
 
     def write_with_retry(self, value):
@@ -36,7 +34,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy bleep"
-            self.redo_connection()
+            subprocess.call(['i2cdetect', '-y', '1'])
             return -1
 
     def write_bytes_with_retry(self, word):
@@ -53,7 +51,7 @@ class TapeControl:
         except IOError as e:
             print e
             print "crazy blep"
-            self.redo_connection()
+            subprocess.call(['i2cdetect', '-y', '1'])
             return -1
 
     def read_bytes(self):
@@ -64,7 +62,7 @@ class TapeControl:
         except IOError as e:
             print "HELP"
             print e
-            self.redo_connection()
+            subprocess.call(['i2cdetect', '-y', '1'])
             return []
 
     def await_bytes_response(self):
@@ -74,7 +72,7 @@ class TapeControl:
 
         while response == -1:
             print "7.5"
-            time.sleep(0.5)
+            time.sleep(1)
             response = self.read_bytes()
 
         return response
@@ -85,7 +83,7 @@ class TapeControl:
         response = 0
 
         while response == 0:
-            time.sleep(0.5)
+            time.sleep(1)
             response = self.read()
 
         return response
@@ -163,7 +161,7 @@ class TapeControl:
 
     def get_message(self):
         self.write_with_retry(9)
-        time.sleep(0.5)
+        time.sleep(1)
         return self.string_from_byte_array(self.await_bytes_response())
 
     def start_of_tape(self):
@@ -180,7 +178,7 @@ class TapeControl:
 
     def get_ticks(self):
         self.write_with_retry(11)
-        time.sleep(0.5)
+        time.sleep(1)
         return self.string_from_byte_array(self.await_bytes_response())
 
     def int_from_byte_array(self, byte_array):
